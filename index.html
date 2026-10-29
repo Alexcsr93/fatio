@@ -18,6 +18,7 @@
 body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:15px;padding-bottom:84px;min-height:100vh}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(14px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--borda)}
 header h1{font-size:19px}
+#sync{font-size:11px;color:var(--mut);display:block;font-weight:500;margin-top:2px}
 .mes{display:flex;align-items:center;gap:6px;font-weight:700}
 .mes button{background:var(--card2);border:none;color:var(--txt);width:32px;height:32px;border-radius:10px;font-size:16px}
 .mes span{min-width:92px;text-align:center;text-transform:capitalize}
@@ -69,14 +70,23 @@ input,select{width:100%;background:var(--card2);border:1px solid var(--borda);co
 canvas{max-width:100%}
 .legenda{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:12px;color:var(--mut)}
 .legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px}
-.toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:#111827;border:1px solid var(--borda);padding:10px 18px;border-radius:12px;z-index:30;font-size:14px}
+.toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:#111827;border:1px solid var(--borda);padding:10px 18px;border-radius:12px;z-index:60;font-size:14px}
 .alerta{background:#451a03;border:1px solid #92400e;color:#fcd34d;border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px}
 .oculto{display:none!important}
+#login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto}
+#login .box{width:100%;max-width:380px;text-align:center}
+#login h2{font-size:26px;margin:8px 0 4px}
+#login p{color:var(--mut);font-size:14px;margin-bottom:18px}
+#login input{margin-bottom:10px}
+.google{background:#fff;color:#111;display:flex;align-items:center;justify-content:center;gap:8px}
+.sep{color:var(--mut);font-size:12px;margin:14px 0}
+.link{background:none;border:none;color:var(--azul);font-size:14px;margin-top:12px;text-decoration:underline;display:block;width:100%}
+#erroLogin{color:#fca5a5;font-size:13px;min-height:18px;margin-top:8px}
 </style>
 </head>
 <body>
 <header>
-  <h1>💰 Finanças <button id="instalar" class="btnp oculto">📲 Instalar</button></h1>
+  <div><h1>💰 Finanças <button id="instalar" class="btnp oculto">📲 Instalar</button></h1><span id="sync"></span></div>
   <div class="mes"><button id="mAnt">‹</button><span id="mTxt"></span><button id="mProx">›</button></div>
 </header>
 <main id="app"></main>
@@ -90,6 +100,22 @@ canvas{max-width:100%}
 </nav>
 <div id="modal"></div>
 
+<div id="login" class="oculto">
+  <div class="box">
+    <div style="font-size:56px">💰</div>
+    <h2>Minhas Finanças</h2>
+    <p>Entre para acessar seus dados no celular e no computador, sempre sincronizados.</p>
+    <button class="btn google" id="bGoogle"><b style="color:#4285f4">G</b> Entrar com Google</button>
+    <div class="sep">ou com e-mail</div>
+    <input id="lEmail" type="email" placeholder="seu@email.com" autocomplete="email">
+    <input id="lSenha" type="password" placeholder="Senha (mín. 6 caracteres)" autocomplete="current-password">
+    <div class="linha" style="margin-top:0"><button class="btn sec" id="bCriar">Criar conta</button><button class="btn" id="bEntrar">Entrar</button></div>
+    <button class="link" id="bEsqueci">Esqueci a senha</button>
+    <div id="erroLogin"></div>
+    <button class="link" style="color:var(--mut)" onclick="semConta()">Continuar sem conta (só neste aparelho)</button>
+  </div>
+</div>
+
 <script>
 // ================== DADOS ==================
 const CHAVE='minhasFinancas_v1';
@@ -102,9 +128,20 @@ const novo=()=>({contas:[{id:uid(),nome:'Carteira',ic:'👛',saldoIni:0},{id:uid
   lancs:[],pagar:[],orc:{},metas:[],dividas:[],oculto:false});
 let D;
 try{D=JSON.parse(localStorage.getItem(CHAVE))||novo()}catch(e){D=novo()}
-['contas','lancs','pagar','metas','dividas'].forEach(k=>D[k]=D[k]||[]);D.orc=D.orc||{};
-function salva(){localStorage.setItem(CHAVE,JSON.stringify(D))}
+function norm(){['contas','lancs','pagar','metas','dividas'].forEach(k=>D[k]=D[k]||[]);D.orc=D.orc||{}}
+norm();
+function salva(){D.atualizado=Date.now();localStorage.setItem(CHAVE,JSON.stringify(D));if(window.nuvemSalvar)nuvemSalvar()}
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+
+// ---- integração com a nuvem ----
+let remotoPendente=null;
+function aplicaRemoto(d,uidU,aviso){
+  if(document.querySelector('#modal').innerHTML){remotoPendente=[d,uidU,aviso];return}
+  D=d;norm();D.sincUid=uidU;localStorage.setItem(CHAVE,JSON.stringify(D));render();if(aviso)toast('🔄 Atualizado de outro aparelho');
+}
+function setSync(t){const e=document.querySelector('#sync');if(e)e.textContent=t}
+function mostrarLogin(v){document.querySelector('#login').classList.toggle('oculto',!v)}
+function semConta(){localStorage.setItem('semConta','1');mostrarLogin(false);setSync('📱 Só neste aparelho')}
 
 // ================== UTIL ==================
 const $=s=>document.querySelector(s);
@@ -273,11 +310,17 @@ function pagaParc(id){const d=D.dividas.find(x=>x.id===id);
 
 function tMais(){
   $('#app').innerHTML=`
+  <div class="card"><h3>☁️ Conta e sincronização</h3>
+    ${window.usuario?`<p style="font-size:14px;margin-bottom:10px">Conectado como <b>${esc(usuario)}</b><br><small style="color:var(--mut)">Seus dados sincronizam entre celular e computador.</small></p>
+      <button class="btn sec" onclick="sair()">Sair desta conta</button>`
+    :window.modoLocal?`<p style="color:var(--mut);font-size:13px">Sincronização não configurada (falta preencher o config.js).</p>`
+    :`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">Você está usando sem conta. Entre para sincronizar com outros aparelhos.</p><button class="btn" onclick="localStorage.removeItem('semConta');mostrarLogin(true)">Entrar / criar conta</button>`}
+  </div>
   <div class="card"><h3>Contas e carteiras <button class="btnp" onclick="formConta()">+ Conta</button></h3>
     ${D.contas.map(c=>`<div class="item" onclick="formConta('${c.id}')"><div class="ic">${c.ic||'🏦'}</div><div class="info"><b>${esc(c.nome)}</b><small>Saldo inicial ${R(c.saldoIni)}</small></div><div class="val">${R(saldoConta(c.id))}</div></div>`).join('')}
   </div>
   <div class="card"><h3>💾 Backup dos seus dados</h3>
-    <p style="color:var(--mut);font-size:13px;margin-bottom:10px">Seus dados ficam salvos <b>neste aparelho</b>. Faça backup de vez em quando — se limpar os dados do navegador ou trocar de celular, é só restaurar.</p>
+    <p style="color:var(--mut);font-size:13px;margin-bottom:10px">Uma cópia extra de segurança, além da nuvem.</p>
     <button class="btn" onclick="exportar()">⬇️ Baixar backup</button>
     <button class="btn sec" style="margin-top:8px" onclick="$('#imp').click()">⬆️ Restaurar backup</button>
     <input type="file" id="imp" accept=".json,application/json" hidden onchange="importar(event)">
@@ -292,12 +335,12 @@ function exportar(){D.ultBackup=Date.now();salva();baixar('backup-financas-'+hoj
 function exportarCSV(){const l=[['Data','Tipo','Descrição','Categoria','Conta','Valor']].concat([...D.lancs].sort((a,b)=>a.data.localeCompare(b.data)).map(x=>[x.data.split('-').reverse().join('/'),x.tipo,x.desc||'',x.cat||'',conta(x.conta)?.nome||'',String(x.tipo==='despesa'?-x.valor:x.valor).replace('.',',')]));
   baixar('lancamentos-'+hoje()+'.csv','\ufeff'+l.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n'),'text/csv')}
 function importar(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const n=JSON.parse(r.result);
-  if(!n.lancs||!n.contas)throw 0;if(confirm('Substituir os dados atuais pelo backup?')){D=n;salva();toast('✅ Backup restaurado');render()}}catch(_){alert('Arquivo de backup inválido')}};r.readAsText(f);e.target.value=''}
-function zerar(){if(confirm('Apagar TUDO? Isso não pode ser desfeito.')&&confirm('Tem certeza mesmo? Faça um backup antes.')){D=novo();salva();render()}}
+  if(!n.lancs||!n.contas)throw 0;if(confirm('Substituir os dados atuais pelo backup?')){const u=D.sincUid;D=n;norm();D.sincUid=u;salva();toast('✅ Backup restaurado');render()}}catch(_){alert('Arquivo de backup inválido')}};r.readAsText(f);e.target.value=''}
+function zerar(){if(confirm('Apagar TUDO? Isso não pode ser desfeito (inclusive na nuvem).')&&confirm('Tem certeza mesmo? Faça um backup antes.')){const u=D.sincUid;D=novo();D.sincUid=u;salva();render()}}
 
 // ================== FORMULÁRIOS ==================
 function abrir(h){$('#modal').innerHTML=`<div class="modal" onclick="if(event.target===this)fechar()"><div class="sheet">${h}</div></div>`}
-function fechar(){$('#modal').innerHTML='';render()}
+function fechar(){$('#modal').innerHTML='';if(remotoPendente){const r=remotoPendente;remotoPendente=null;aplicaRemoto(...r)}else render()}
 const optsConta=sel=>D.contas.map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.ic} ${esc(c.nome)}</option>`).join('');
 const optsCat=(t,sel)=>Object.keys(CATS[t]).map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
 
@@ -325,8 +368,9 @@ function formLanc(id){
   $('#ok').onclick=()=>{
     const v=num($('#fv').value);if(v<=0)return alert('Informe o valor');
     if(tipo==='transf'&&$('#fa').value===$('#fdst').value)return alert('Escolha contas diferentes');
-    const base={tipo,valor:v,desc:$('#fd').value.trim(),cat:tipo==='transf'?'':$('#fc').value,conta:$('#fa').value,dest:tipo==='transf'?$('#fdst').value:undefined,data:$('#fdt').value||hoje()};
-    if(id)Object.assign(l,base);
+    const base={tipo,valor:v,desc:$('#fd').value.trim(),cat:tipo==='transf'?'':$('#fc').value,conta:$('#fa').value,data:$('#fdt').value||hoje()};
+    if(tipo==='transf')base.dest=$('#fdst').value;
+    if(id){Object.assign(l,base);if(tipo!=='transf')delete l.dest}
     else{const n=$('#frep')?.checked?Math.max(2,Math.min(120,+$('#fqtd').value||2)):1;
       for(let i=0;i<n;i++){const[y,m,d]=base.data.split('-');const mm=addMes(y+'-'+m,i);
         const ult=new Date(+mm.slice(0,4),+mm.slice(5),0).getDate();
@@ -410,6 +454,93 @@ let pedidoInstalar;
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();pedidoInstalar=e;$('#instalar').classList.remove('oculto')});
 $('#instalar').onclick=async()=>{if(!pedidoInstalar)return;pedidoInstalar.prompt();await pedidoInstalar.userChoice;pedidoInstalar=null;$('#instalar').classList.add('oculto')};
 addEventListener('appinstalled',()=>{$('#instalar').classList.add('oculto');toast('✅ App instalado!')});
+</script>
+
+<script src="config.js"></script>
+<script type="module">
+// ================== LOGIN + SINCRONIZAÇÃO (Firebase) ==================
+const cfg=window.FIREBASE_CONFIG;
+if(!cfg||!cfg.apiKey||cfg.apiKey.includes('COLE')){
+  window.modoLocal=true;mostrarLogin(false);setSync('📱 Só neste aparelho');
+}else{
+  if(!localStorage.getItem('semConta'))setSync('⏳ Conectando…');
+  const V='https://www.gstatic.com/firebasejs/10.12.2/';
+  try{
+  const {initializeApp}=await import(V+'firebase-app.js');
+  const A=await import(V+'firebase-auth.js');
+  const F=await import(V+'firebase-firestore.js');
+  const app=initializeApp(cfg);
+  const auth=A.getAuth(app);
+  auth.languageCode='pt';
+  const db=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})});
+  let ref=null,unsub=null,timer=null;
+  const tem=d=>!!(d&&((d.lancs||[]).length||(d.pagar||[]).length||(d.metas||[]).length||(d.dividas||[]).length));
+
+  window.nuvemSalvar=()=>{
+    if(!ref)return;clearTimeout(timer);
+    setSync(navigator.onLine?'⏳ Salvando…':'📴 Offline – salvo no aparelho');
+    timer=setTimeout(async()=>{
+      try{await F.setDoc(ref,{dados:JSON.stringify(D),atualizado:D.atualizado||Date.now()});setSync('☁️ Sincronizado')}
+      catch(e){console.error(e);setSync('⚠️ Erro ao sincronizar')}
+    },700);
+  };
+  addEventListener('online',()=>{if(ref)setSync('☁️ Sincronizado')});
+  addEventListener('offline',()=>{if(ref)setSync('📴 Offline – salvo no aparelho')});
+
+  const MSG={'auth/invalid-email':'E-mail inválido','auth/missing-password':'Digite a senha','auth/weak-password':'Senha fraca: use pelo menos 6 caracteres',
+    'auth/email-already-in-use':'Esse e-mail já tem conta. Toque em Entrar.','auth/invalid-credential':'E-mail ou senha incorretos',
+    'auth/wrong-password':'Senha incorreta','auth/user-not-found':'Conta não encontrada','auth/too-many-requests':'Muitas tentativas. Aguarde um pouco.',
+    'auth/network-request-failed':'Sem internet','auth/unauthorized-domain':'Site não autorizado no Firebase (veja o LEIA-ME, passo 3)',
+    'auth/popup-closed-by-user':'Login cancelado','auth/operation-not-allowed':'Esse tipo de login não foi ativado no Firebase (LEIA-ME, passo 2)'};
+  const erro=e=>{document.getElementById('erroLogin').textContent=MSG[e.code]||('Erro: '+(e.code||e.message))};
+  const em=()=>document.getElementById('lEmail').value.trim(),se=()=>document.getElementById('lSenha').value;
+
+  document.getElementById('bGoogle').onclick=async()=>{
+    const p=new A.GoogleAuthProvider();
+    try{await A.signInWithPopup(auth,p)}
+    catch(e){if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/cancelled-popup-request'].includes(e.code))await A.signInWithRedirect(auth,p);else erro(e)}
+  };
+  document.getElementById('bEntrar').onclick=()=>A.signInWithEmailAndPassword(auth,em(),se()).catch(erro);
+  document.getElementById('bCriar').onclick=()=>A.createUserWithEmailAndPassword(auth,em(),se()).catch(erro);
+  document.getElementById('bEsqueci').onclick=()=>{if(!em())return erro({code:'auth/invalid-email'});
+    A.sendPasswordResetEmail(auth,em()).then(()=>document.getElementById('erroLogin').textContent='📧 Enviamos um link para redefinir a senha').catch(erro)};
+  A.getRedirectResult(auth).catch(erro);
+
+  window.sair=async()=>{
+    if(!confirm('Sair da conta?\n\nOs dados continuam salvos na nuvem e serão apagados só deste aparelho.'))return;
+    if(unsub)unsub();unsub=null;ref=null;window.usuario=null;
+    await A.signOut(auth);D=novo();localStorage.setItem(CHAVE,JSON.stringify(D));aba='inicio';render();
+  };
+
+  A.onAuthStateChanged(auth,u=>{
+    if(unsub){unsub();unsub=null}
+    if(!u){ref=null;window.usuario=null;
+      if(localStorage.getItem('semConta'))setSync('📱 Só neste aparelho');else{setSync('');mostrarLogin(true)}
+      return}
+    localStorage.removeItem('semConta');
+    window.usuario=u.email||u.displayName||'conta';mostrarLogin(false);
+    document.getElementById('erroLogin').textContent='';
+    ref=F.doc(db,'usuarios',u.uid);setSync('⏳ Carregando…');
+    let primeiro=true;
+    unsub=F.onSnapshot(ref,snap=>{
+      if(snap.metadata.hasPendingWrites)return;
+      if(primeiro){primeiro=false;
+        if(!snap.exists()){D.sincUid=u.uid;salva();if(aba==='mais')render();return}
+        const r=snap.data(),remoto=JSON.parse(r.dados);
+        if(D.sincUid===u.uid){if((D.atualizado||0)>(r.atualizado||0))nuvemSalvar();else aplicaRemoto(remoto,u.uid)}
+        else if(tem(D)&&tem(remoto)){
+          if(confirm('Encontrei dados neste aparelho E na sua conta.\n\nOK = usar os dados da CONTA (recomendado)\nCancelar = substituir a conta pelos dados DESTE APARELHO'))aplicaRemoto(remoto,u.uid);
+          else{D.sincUid=u.uid;salva()}
+        }else if(tem(D)){D.sincUid=u.uid;salva()}
+        else aplicaRemoto(remoto,u.uid);
+        setSync('☁️ Sincronizado');if(aba==='mais')render();return}
+      const r=snap.data();if(!r)return;
+      if((r.atualizado||0)>(D.atualizado||0))aplicaRemoto(JSON.parse(r.dados),u.uid,true);
+      setSync('☁️ Sincronizado');
+    },e=>{console.error(e);setSync(e.code==='permission-denied'?'⚠️ Sem permissão (regras do Firestore)':'⚠️ Erro ao sincronizar')});
+  });
+  }catch(e){console.error(e);setSync('📴 Sem conexão – usando dados do aparelho')}
+}
 </script>
 </body>
 </html>

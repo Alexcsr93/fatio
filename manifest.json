@@ -1,7 +1,7 @@
 {
   "name": "Minhas Finanças",
   "short_name": "Finanças",
-  "description": "Controle financeiro pessoal: contas, lançamentos, metas e dívidas.",
+  "description": "Controle financeiro pessoal com sincronização entre aparelhos.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
