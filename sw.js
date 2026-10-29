@@ -1,5 +1,5 @@
 // Service worker: app funciona offline. Login/sincronização vão direto para a rede.
-const CACHE='financas-v3';
+const CACHE='financas-v5';
 const ARQS=['./','./index.html','./manifest.json','./config.js','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./icon-180.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ARQS)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
