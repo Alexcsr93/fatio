@@ -4,20 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0b1220">
-<title>Minhas Finanças</title>
+<title>Fatiô</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Finanças">
+<meta name="apple-mobile-web-app-title" content="Fatiô">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{--bg:#0b1220;--card:#131c2e;--card2:#1a2540;--txt:#e5e7eb;--mut:#94a3b8;--verde:#22c55e;--verm:#ef4444;--azul:#3b82f6;--amar:#f59e0b;--roxo:#a855f7;--borda:#26324d}
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif;font-size:15px;padding-bottom:84px;min-height:100vh}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(14px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--borda)}
-header h1{font-size:19px}
+header h1{font-size:19px;display:flex;align-items:center;gap:8px}
+.logo{width:28px;height:28px;border-radius:8px}
 #sync{font-size:11px;color:var(--mut);display:block;font-weight:500;margin-top:2px}
 .mes{display:flex;align-items:center;gap:6px;font-weight:700}
 .mes button{background:var(--card2);border:none;color:var(--txt);width:32px;height:32px;border-radius:10px;font-size:16px}
@@ -64,6 +65,7 @@ input,select{width:100%;background:var(--card2);border:1px solid var(--borda);co
 .tipos button.on{border-color:var(--azul)}
 .linha{display:flex;gap:8px;margin-top:14px}
 .vazio{color:var(--mut);text-align:center;padding:16px 0;font-size:14px}
+.vazio a{color:var(--mut)}
 .olho{background:none;border:none;color:var(--mut);font-size:18px}
 .check{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .check input{width:20px;height:20px}
@@ -75,7 +77,7 @@ canvas{max-width:100%}
 .oculto{display:none!important}
 #login{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto}
 #login .box{width:100%;max-width:380px;text-align:center}
-#login h2{font-size:26px;margin:8px 0 4px}
+#login h2{font-size:30px;margin:12px 0 4px}
 #login p{color:var(--mut);font-size:14px;margin-bottom:18px}
 #login input{margin-bottom:10px}
 .google{background:#fff;color:#111;display:flex;align-items:center;justify-content:center;gap:8px}
@@ -86,7 +88,7 @@ canvas{max-width:100%}
 </head>
 <body>
 <header>
-  <div><h1>💰 Finanças <button id="instalar" class="btnp oculto">📲 Instalar</button></h1><span id="sync"></span></div>
+  <div><h1><img src="icon-192.png" class="logo" alt="">Fatiô <button id="instalar" class="btnp oculto">📲 Instalar</button></h1><span id="sync"></span></div>
   <div class="mes"><button id="mAnt">‹</button><span id="mTxt"></span><button id="mProx">›</button></div>
 </header>
 <main id="app"></main>
@@ -102,9 +104,9 @@ canvas{max-width:100%}
 
 <div id="login" class="oculto">
   <div class="box">
-    <div style="font-size:56px">💰</div>
-    <h2>Minhas Finanças</h2>
-    <p>Entre para acessar seus dados no celular e no computador, sempre sincronizados.</p>
+    <img src="icon-192.png" alt="Fatiô" style="width:88px;height:88px;border-radius:22px">
+    <h2>Fatiô</h2>
+    <p>Seu dinheiro, fatia por fatia.<br>Entre para acessar no celular e no computador, sempre sincronizado.</p>
     <button class="btn google" id="bGoogle"><b style="color:#4285f4">G</b> Entrar com Google</button>
     <div class="sep">ou com e-mail</div>
     <input id="lEmail" type="email" placeholder="seu@email.com" autocomplete="email">
@@ -113,12 +115,14 @@ canvas{max-width:100%}
     <button class="link" id="bEsqueci">Esqueci a senha</button>
     <div id="erroLogin"></div>
     <button class="link" style="color:var(--mut)" onclick="semConta()">Continuar sem conta (só neste aparelho)</button>
+    <a href="privacidade.html" class="link" style="color:var(--mut);font-size:12px">Política de privacidade</a>
   </div>
 </div>
 
 <script>
 // ================== DADOS ==================
-const CHAVE='minhasFinancas_v1';
+const VERSAO='1.0';
+const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
  receita:{'Salário':'💼','Hora extra':'⏱️','Freela':'💻','Benefícios':'🎫','Rendimentos':'📈','Vendas':'🏷️','Reembolso':'↩️','Outros':'💵'}
@@ -280,7 +284,7 @@ function tPlanos(){
       <div style="display:flex;justify-content:space-between"><b>${m.ic||'🎯'} ${esc(m.nome)}</b><span style="color:var(--mut);font-size:13px">${Math.round(p)}%</span></div>
       <small style="color:var(--mut)">${R(m.atual)} de ${R(m.alvo)}${m.prazo?' · até '+m.prazo.split('-').reverse().join('/'):''}</small>
       <div class="barra"><i style="width:${p}%;background:var(--roxo)"></i></div>
-      <div class="linha" style="margin-top:8px"><button class="btnp" onclick="movMeta('${m.id}',1)">+ Guardar</button><button class="btnp" onclick="movMeta('${m.id}',-1)">− Retirar</button><button class="btnp" onclick="formMeta('${m.id}')">✏️</button></div></div>`}).join('')||'<div class="vazio">Crie metas: reserva de emergência, viagem, presente da Larissa…</div>'}
+      <div class="linha" style="margin-top:8px"><button class="btnp" onclick="movMeta('${m.id}',1)">+ Guardar</button><button class="btnp" onclick="movMeta('${m.id}',-1)">− Retirar</button><button class="btnp" onclick="formMeta('${m.id}')">✏️</button></div></div>`}).join('')||'<div class="vazio">Crie metas: reserva de emergência, viagem, presentes…</div>'}
   </div>
   <div class="card"><h3>🏦 Dívidas e parcelamentos <button class="btnp" onclick="formDiv()">+ Dívida</button></h3>
     ${D.dividas.map(d=>{const rest=d.total-d.pagas;return`<div class="item" style="display:block">
@@ -312,7 +316,9 @@ function tMais(){
   $('#app').innerHTML=`
   <div class="card"><h3>☁️ Conta e sincronização</h3>
     ${window.usuario?`<p style="font-size:14px;margin-bottom:10px">Conectado como <b>${esc(usuario)}</b><br><small style="color:var(--mut)">Seus dados sincronizam entre celular e computador.</small></p>
-      <button class="btn sec" onclick="sair()">Sair desta conta</button>`
+      <button class="btn sec" onclick="sair()">Sair desta conta</button>
+      <button class="btn perigo" style="margin-top:8px" onclick="excluirConta()">🗑️ Excluir minha conta</button>
+      <p style="color:var(--mut);font-size:12px;margin-top:6px">Apaga sua conta e todos os seus dados da nuvem e deste aparelho.</p>`
     :window.modoLocal?`<p style="color:var(--mut);font-size:13px">Sincronização não configurada (falta preencher o config.js).</p>`
     :`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">Você está usando sem conta. Entre para sincronizar com outros aparelhos.</p><button class="btn" onclick="localStorage.removeItem('semConta');mostrarLogin(true)">Entrar / criar conta</button>`}
   </div>
@@ -327,13 +333,13 @@ function tMais(){
     <button class="btn sec" style="margin-top:8px" onclick="exportarCSV()">📄 Exportar lançamentos (planilha CSV)</button>
     <p style="color:var(--mut);font-size:12px;margin-top:8px">Último backup: ${D.ultBackup?new Date(D.ultBackup).toLocaleString('pt-BR'):'nunca'}</p>
   </div>
-  <div class="card"><h3>Zona de perigo</h3><button class="btn perigo" onclick="zerar()">🗑️ Apagar todos os dados</button></div>
-  <p class="vazio">${D.lancs.length} lançamentos · ${D.pagar.length} contas a pagar</p>`;
+  <div class="card"><h3>Zona de perigo</h3><button class="btn perigo" onclick="zerar()">🗑️ Apagar todos os lançamentos e dados</button></div>
+  <p class="vazio">${D.lancs.length} lançamentos · ${D.pagar.length} contas a pagar<br>Fatiô v${VERSAO} · <a href="privacidade.html">Política de privacidade</a></p>`;
 }
 function baixar(nome,txt,tipo){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:tipo}));a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
-function exportar(){D.ultBackup=Date.now();salva();baixar('backup-financas-'+hoje()+'.json',JSON.stringify(D),'application/json');render()}
+function exportar(){D.ultBackup=Date.now();salva();baixar('backup-fatio-'+hoje()+'.json',JSON.stringify(D),'application/json');render()}
 function exportarCSV(){const l=[['Data','Tipo','Descrição','Categoria','Conta','Valor']].concat([...D.lancs].sort((a,b)=>a.data.localeCompare(b.data)).map(x=>[x.data.split('-').reverse().join('/'),x.tipo,x.desc||'',x.cat||'',conta(x.conta)?.nome||'',String(x.tipo==='despesa'?-x.valor:x.valor).replace('.',',')]));
-  baixar('lancamentos-'+hoje()+'.csv','\ufeff'+l.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n'),'text/csv')}
+  baixar('fatio-lancamentos-'+hoje()+'.csv','\ufeff'+l.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n'),'text/csv')}
 function importar(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const n=JSON.parse(r.result);
   if(!n.lancs||!n.contas)throw 0;if(confirm('Substituir os dados atuais pelo backup?')){const u=D.sincUid;D=n;norm();D.sincUid=u;salva();toast('✅ Backup restaurado');render()}}catch(_){alert('Arquivo de backup inválido')}};r.readAsText(f);e.target.value=''}
 function zerar(){if(confirm('Apagar TUDO? Isso não pode ser desfeito (inclusive na nuvem).')&&confirm('Tem certeza mesmo? Faça um backup antes.')){const u=D.sincUid;D=novo();D.sincUid=u;salva();render()}}
@@ -480,6 +486,7 @@ if(!cfg||!cfg.apiKey||cfg.apiKey.includes('COLE')){
     if(!ref)return;clearTimeout(timer);
     setSync(navigator.onLine?'⏳ Salvando…':'📴 Offline – salvo no aparelho');
     timer=setTimeout(async()=>{
+      if(!ref)return;
       try{await F.setDoc(ref,{dados:JSON.stringify(D),atualizado:D.atualizado||Date.now()});setSync('☁️ Sincronizado')}
       catch(e){console.error(e);setSync('⚠️ Erro ao sincronizar')}
     },700);
@@ -490,8 +497,9 @@ if(!cfg||!cfg.apiKey||cfg.apiKey.includes('COLE')){
   const MSG={'auth/invalid-email':'E-mail inválido','auth/missing-password':'Digite a senha','auth/weak-password':'Senha fraca: use pelo menos 6 caracteres',
     'auth/email-already-in-use':'Esse e-mail já tem conta. Toque em Entrar.','auth/invalid-credential':'E-mail ou senha incorretos',
     'auth/wrong-password':'Senha incorreta','auth/user-not-found':'Conta não encontrada','auth/too-many-requests':'Muitas tentativas. Aguarde um pouco.',
-    'auth/network-request-failed':'Sem internet','auth/unauthorized-domain':'Site não autorizado no Firebase (veja o LEIA-ME, passo 3)',
-    'auth/popup-closed-by-user':'Login cancelado','auth/operation-not-allowed':'Esse tipo de login não foi ativado no Firebase (LEIA-ME, passo 2)'};
+    'auth/network-request-failed':'Sem internet','auth/unauthorized-domain':'Site não autorizado no Firebase (domínios autorizados)',
+    'auth/popup-closed-by-user':'Login cancelado','auth/operation-not-allowed':'Esse tipo de login não foi ativado no Firebase',
+    'auth/requires-recent-login':'Por segurança, saia, entre de novo e repita a exclusão','auth/user-mismatch':'Use a mesma conta que está conectada'};
   const erro=e=>{document.getElementById('erroLogin').textContent=MSG[e.code]||('Erro: '+(e.code||e.message))};
   const em=()=>document.getElementById('lEmail').value.trim(),se=()=>document.getElementById('lSenha').value;
 
@@ -510,6 +518,37 @@ if(!cfg||!cfg.apiKey||cfg.apiKey.includes('COLE')){
     if(!confirm('Sair da conta?\n\nOs dados continuam salvos na nuvem e serão apagados só deste aparelho.'))return;
     if(unsub)unsub();unsub=null;ref=null;window.usuario=null;
     await A.signOut(auth);D=novo();localStorage.setItem(CHAVE,JSON.stringify(D));aba='inicio';render();
+  };
+
+  // ---- Excluir conta e todos os dados (exigência da Play Store) ----
+  window.excluirConta=async()=>{
+    const u=auth.currentUser;if(!u)return;
+    if(!confirm('Excluir sua conta e TODOS os seus dados?\n\nIsso apaga tudo da nuvem e deste aparelho e não pode ser desfeito.'))return;
+    const c=prompt('Para confirmar, digite EXCLUIR');
+    if((c||'').trim().toUpperCase()!=='EXCLUIR'){toast('Exclusão cancelada');return}
+    try{
+      setSync('⏳ Excluindo…');
+      const prov=(u.providerData[0]||{}).providerId;
+      if(prov==='password'){
+        const s=prompt('Por segurança, digite sua senha:');
+        if(!s){setSync('☁️ Sincronizado');return}
+        await A.reauthenticateWithCredential(u,A.EmailAuthProvider.credential(u.email,s));
+      }else if(prov==='google.com'){
+        await A.reauthenticateWithPopup(u,new A.GoogleAuthProvider());
+      }
+      if(unsub){unsub();unsub=null}
+      clearTimeout(timer);
+      await F.deleteDoc(F.doc(db,'usuarios',u.uid));
+      ref=null;
+      await A.deleteUser(u);
+      window.usuario=null;
+      D=novo();localStorage.setItem(CHAVE,JSON.stringify(D));localStorage.removeItem('semConta');
+      aba='inicio';render();
+      alert('Sua conta e todos os seus dados foram excluídos.');
+    }catch(e){
+      console.error(e);setSync('⚠️ Não foi possível excluir');
+      alert('Não foi possível excluir: '+(MSG[e.code]||e.code||e.message));
+    }
   };
 
   A.onAuthStateChanged(auth,u=>{
