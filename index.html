@@ -204,6 +204,13 @@ function semConta(){localStorage.setItem('semConta','1');mostrarLogin(false);set
 const $=s=>document.querySelector(s);
 const hoje=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 let mes=hoje().slice(0,7),aba='inicio',filtro='todos';
+// mantém a tela atual ao recarregar (puxar para baixo). Vale só enquanto o app está aberto.
+const TELA_K='fatioTela';let rolarPara=0;
+try{const t=JSON.parse(sessionStorage.getItem(TELA_K)||'null');
+  if(t&&['inicio','lanc','contas','planos','mais'].includes(t.aba)){aba=t.aba;if(/^\d{4}-\d{2}$/.test(t.mes))mes=t.mes;if(t.filtro)filtro=t.filtro;rolarPara=+t.y||0}}catch(_){}
+function guardaTela(){try{sessionStorage.setItem(TELA_K,JSON.stringify({aba,mes,filtro,y:Math.round(scrollY)}))}catch(_){}}
+addEventListener('pagehide',guardaTela);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)guardaTela()});
 const R=v=>D.oculto?'R$ •••':(v<0?'-':'')+'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const num=s=>{s=String(s).trim();if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');return Math.round((parseFloat(s)||0)*100)/100};
 const nomeMes=m=>new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}).replace('.','');
@@ -621,6 +628,7 @@ function cardDicas(){
 
 // ================== TELAS ==================
 function render(){
+  guardaTela();
   $('#mTxt').textContent=nomeMes(mes);
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===aba));
   $('#fab').classList.toggle('oculto',aba==='mais');
@@ -1067,6 +1075,7 @@ $('#fab').onclick=()=>{if(aba==='contas')formPagar();else if(aba==='planos')form
 addEventListener('resize',()=>{if(aba==='inicio'&&!$('#modal').innerHTML&&document.activeElement?.id!=='rapTxt')render()});
 montaTeclado();
 render();
+if(rolarPara)requestAnimationFrame(()=>scrollTo(0,rolarPara));
 
 // atalhos do ícone (segurar o ícone → Nova despesa / Nova receita)
 const novoTipo=new URLSearchParams(location.search).get('novo');
