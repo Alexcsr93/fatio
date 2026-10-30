@@ -1,0 +1,19 @@
+FATIÔ v1.1 – O QUE ENVIAR PARA O GITHUB (repositório "fatio")
+=============================================================
+Envie estes 5 arquivos (substituem os antigos):
+  index.html, manifest.json, sw.js, icon-despesa.png, icon-receita.png
+
+NÃO envie / NÃO apague: config.js, privacidade.html, excluir-conta.html
+e os ícones icon-180/192/512/maskable – continuam iguais.
+
+Depois do commit, espere o ✅ verde em Actions.
+No celular, feche e abra o app 2 vezes para pegar a versão nova.
+
+IMPORTANTE: publique esta versão ANTES de gerar o pacote no PWABuilder.
+Os atalhos (segurar o ícone) são gravados no pacote Android na hora em que ele é gerado.
+
+-------------------------------------------------------------
+ACRESCENTE NA privacidade.html (logo depois da seção 3 "Onde os dados ficam"):
+-------------------------------------------------------------
+<h2>3.1 Lançamento por voz e PIN</h2>
+<p>O lançamento por voz é opcional e usa o reconhecimento de voz do próprio navegador/sistema do seu aparelho (no Android, serviço do Google). O Fatiô recebe apenas o texto reconhecido e não grava nem armazena áudio. O PIN de bloqueio fica salvo somente no seu aparelho, de forma criptografada, e nunca é enviado para a nuvem.</p>
