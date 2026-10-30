@@ -415,6 +415,19 @@ function txtReserva(m){
 }
 // base do cálculo diário: 'entradas' (padrão) ou 'saldo'
 const baseDiaria=()=>D.baseDiaria==='saldo'?'saldo':'entradas';
+// Orçamento: separa contas fixas pagas (pela aba A pagar) dos gastos do dia a dia
+function statusOrc(m,c,v){
+  const ids=idsDeContas(),ls=doMes(m).filter(l=>l.tipo==='despesa'&&l.cat===c);
+  const nomesFixos=new Set(D.pagar.map(x=>limpaTxt(x.desc)));
+  const ehFixo=l=>ids.has(l.id)||nomesFixos.has(limpaTxt(l.desc))||/\s\d+\/\d+$/.test(l.desc||'');
+  const g=soma(ls),fixo=soma(ls.filter(ehFixo)),varia=g-fixo,p=v>0?g/v*100:0;
+  const estourou=g>v+0.005;
+  // alerta: passou do limite, ou chegou a 90% com gastos variáveis (não só conta fixa)
+  const alerta=estourou||(p>=90&&varia>0.005);
+  const cor=estourou?'var(--verm)':(p>=80&&varia>0.005)?'var(--amar)':'var(--verde)';
+  return{g,fixo,varia,p,estourou,alerta,cor,soFixo:g>0&&varia<=0.005};
+}
+function dispensarAlerta(c){D.alertaOk=D.alertaOk||{};D.alertaOk[mes+'|'+c]=Math.round(soma(doMes(mes).filter(l=>l.tipo==='despesa'&&l.cat===c))*100);salva();render()}
 function primeiroNome(n){n=String(n||'').trim().split(/\s+/)[0]||'';return n.charAt(0).toUpperCase()+n.slice(1)}
 function saudacao(){const hr=new Date().getHours();return hr>=5&&hr<12?'Bom dia':hr>=12&&hr<18?'Boa tarde':'Boa noite'}
 function fraseContexto(){
@@ -426,7 +439,7 @@ function fraseContexto(){
     return hj?`⏰ ${hj===1?'1 conta vence':hj+' contas vencem'} hoje`:`⏰ ${sem.length===1?'1 conta vence':sem.length+' contas vencem'} nos próximos 7 dias`}
   const d=window._diario;
   if(d){
-    if(d.zero)return'🔻 O orçamento do mês já está no limite';
+    if(d.zero)return'🔻 Sem margem para gastar este mês';
     if(d.porDia>0){const p=d.gHoje/d.porDia;
       if(p>1)return`🔻 Você passou ${R(d.gHoje-d.porDia)} do limite de hoje`;
       if(p>=.75)return'🟡 Perto do limite de hoje';
@@ -581,7 +594,8 @@ function tInicio(){
   const h=hoje(),r=resumo(mes),pend=pagarDoMes(mes).filter(p=>!p.pago),gc=gastoCat(mes);
   const venc=pend.filter(p=>p.venc<h),prox=pend.filter(p=>p.venc>=h&&p.venc<=addDias(h,5));
   const cats=Object.entries(gc).sort((a,b)=>b[1]-a[1]);
-  const orcAlerta=Object.entries(D.orc).filter(([c,v])=>v>0&&(gc[c]||0)>=v*.9);
+  const orcAlerta=Object.entries(D.orc).filter(([c,v])=>{if(!(v>0))return false;const st=statusOrc(mes,c,v);
+    const ok=D.alertaOk&&D.alertaOk[mes+'|'+c];return st.alerta&&!(ok&&ok>=Math.round(st.g*100))});
   const totPend=soma(pend),st=saldoTotal(h),temCx=D.contas.some(ehCx);
   window._diario=null;const cd=mes===h.slice(0,7)?cardDiario():'';
   $('#app').innerHTML=`
@@ -589,7 +603,7 @@ function tInicio(){
   ${barraRapida()}
   ${venc.length?`<div class="alerta">⚠️ ${venc.length} conta(s) vencida(s) sem pagamento: ${venc.map(p=>esc(p.desc)).join(', ')}</div>`:''}
   ${prox.length?`<div class="alerta">⏰ Vence em até 5 dias: ${prox.map(p=>esc(p.desc)+' ('+dataBR(p.venc)+')').join(', ')}</div>`:''}
-  ${orcAlerta.map(([c,v])=>`<div class="alerta">📊 ${esc(c)}: já usou ${Math.round((gc[c]||0)/v*100)}% do orçamento</div>`).join('')}
+  ${orcAlerta.map(([c,v])=>{const st=statusOrc(mes,c,v);return`<div class="alerta" style="display:flex;gap:8px;align-items:center"><span style="flex:1">📊 ${esc(c)}: ${st.estourou?`passou ${R(st.g-v)} do orçamento (${R(st.g)} de ${R(v)})`:`já usou ${Math.round(st.p)}% do orçamento`}</span><button class="btnp" style="background:#78350f;color:#fde68a" onclick="dispensarAlerta('${esc(c)}')">Ok</button></div>`}).join('')}
   <div class="card">
     <h3>Saldo total hoje <button class="olho" onclick="D.oculto=!D.oculto;salva();render()">${D.oculto?'🙈':'👁️'}</button></h3>
     <div class="grande ${st<0?'neg':''}">${R(st)}</div>
@@ -688,9 +702,10 @@ function tPlanos(){
       <div class="linha" style="margin-top:8px">${rest>0?`<button class="btnp" onclick="pagaParc('${d.id}')">Pagar parcela</button>`:'<span class="pos">✅ Quitada!</span>'}<button class="btnp" onclick="formDiv('${d.id}')">✏️</button></div></div>`}).join('')||'<div class="vazio">Cadastre empréstimos, financiamentos e compras parceladas.</div>'}
   </div>
   <div class="card"><h3>📊 Orçamento do mês <button class="btnp" onclick="formOrc()">Definir</button></h3>
-    ${Object.entries(D.orc).filter(([,v])=>v>0).map(([c,v])=>{const g=gc[c]||0,p=g/v*100;return`<div class="item" style="display:block">
-      <div style="display:flex;justify-content:space-between"><b>${icCat('despesa',c)} ${esc(c)}</b><small style="color:var(--mut)">${R(g)} / ${R(v)}</small></div>
-      <div class="barra"><i style="width:${Math.min(100,p)}%;background:${p>=100?'var(--verm)':p>=80?'var(--amar)':'var(--verde)'}"></i></div></div>`}).join('')||'<div class="vazio">Defina limites de gasto (ex.: Mercado R$ 800).</div>'}
+    ${Object.entries(D.orc).filter(([,v])=>v>0).map(([c,v])=>{const st=statusOrc(mes,c,v);return`<div class="item" style="display:block">
+      <div style="display:flex;justify-content:space-between"><b>${icCat('despesa',c)} ${esc(c)}</b><small style="color:var(--mut)">${R(st.g)} / ${R(v)}</small></div>
+      <div class="barra"><i style="width:${Math.min(100,st.p)}%;background:${st.cor}"></i></div>
+      ${st.soFixo&&!st.estourou&&st.p>=99.9?'<small style="color:var(--verde)">✅ Conta fixa paga. Orçamento usado como previsto</small>':st.fixo>0&&st.varia>0?`<small style="color:var(--mut)">Contas fixas ${R(st.fixo)} · dia a dia ${R(st.varia)}</small>`:''}</div>`}).join('')||'<div class="vazio">Defina limites de gasto (ex.: Mercado R$ 800).</div>'}
   </div>`;
 }
 function movMeta(id,s){const m=D.metas.find(x=>x.id===id);
