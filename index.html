@@ -34,6 +34,17 @@ main{padding:14px 14px 0;max-width:640px;margin:0 auto}
 .pos{color:var(--verde)}.neg{color:var(--verm)}.amar{color:var(--amar)}
 .item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--borda)}
 .item:last-child{border-bottom:none}
+.icx{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.icx svg{width:21px;height:21px}
+.gIc{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.gIc button{background:var(--card2);border:2px solid transparent;border-radius:12px;padding:10px 4px 6px;color:var(--txt);display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px}
+.gIc button svg{width:24px;height:24px}
+.gIc button.on{border-color:var(--azul);background:#1e3a8a55}
+.gCor{display:flex;flex-wrap:wrap;gap:10px}
+.gCor button{width:34px;height:34px;border-radius:50%;border:3px solid transparent;box-shadow:0 0 0 1px var(--borda)}
+.gCor button.on{border-color:#fff}
+.prevConta{display:flex;align-items:center;gap:12px;background:var(--card2);border-radius:14px;padding:12px;margin-top:6px}
+.prevConta .icx{width:48px;height:48px;border-radius:15px}.prevConta .icx svg{width:26px;height:26px}
 .ic{width:38px;height:38px;border-radius:12px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
 .info{flex:1;min-width:0}
 .info b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -170,7 +181,7 @@ const CATS={
  receita:{'Salário':'💼','Hora extra':'⏱️','Freela':'💻','Benefícios':'🎫','Rendimentos':'📈','Vendas':'🏷️','Reembolso':'↩️','Outros':'💵'}
 };
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
-const novo=()=>({contas:[{id:uid(),nome:'Carteira',ic:'👛',saldoIni:0},{id:uid(),nome:'Conta corrente',ic:'🏦',saldoIni:0}],
+const novo=()=>({contas:[{id:uid(),nome:'Carteira',ic:'carteira',cor:'#0F766E',saldoIni:0},{id:uid(),nome:'Conta corrente',ic:'banco',cor:'#3B82F6',saldoIni:0}],
   lancs:[],pagar:[],orc:{},metas:[],dividas:[],oculto:false});
 let D;
 try{D=JSON.parse(localStorage.getItem(CHAVE))||novo()}catch(e){D=novo()}
@@ -223,6 +234,32 @@ function saldoConta(id,ate){
   return Math.round(s*100)/100;
 }
 const saldoTotal=ate=>D.contas.reduce((a,c)=>a+saldoConta(c.id,ate),0);
+// ---- Ícones modernos das contas (SVG, traço) ----
+const SVG=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const ICONES={
+  banco:{n:'Banco',p:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 21h18"/>'},
+  digital:{n:'Banco digital',p:'<rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/><path d="M9.5 9.5h5M9.5 12.5h3"/>'},
+  carteira:{n:'Carteira',p:'<path d="M19 7V5.5A1.5 1.5 0 0 0 17.5 4H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v3"/><path d="M3 6v12a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-3"/><path d="M21 12v4h-4a2 2 0 0 1 0-4z"/>'},
+  cartao:{n:'Cartão',p:'<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h3"/>'},
+  dinheiro:{n:'Dinheiro',p:'<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v.01M18 14.5v.01"/>'},
+  poupanca:{n:'Poupança',p:'<path d="M19 9.5c-.8-2.7-3.6-4.5-7-4.5-4.1 0-7 2.6-7 6 0 1.8.8 3.3 2 4.4V19h3v-2h4v2h3v-3.4c.7-.6 1.2-1.3 1.6-2.1H21v-4z"/><path d="M15.5 10.5v.01"/><path d="M10 5.3V3.5"/>'},
+  invest:{n:'Investimentos',p:'<path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 6-6"/><path d="M15 7h5v5"/>'},
+  pix:{n:'Pix',p:'<path d="M12 3 21 12 12 21 3 12z"/><path d="M8.5 12h7"/>'}
+};
+const CORES_CONTA=[['#8A05BE','Roxo'],['#FF7A00','Laranja'],['#EC7000','Itaú'],['#21C25E','Verde'],['#00B1EA','Azul claro'],['#005CA9','Azul'],['#CC092F','Vermelho'],['#E8B500','Amarelo'],['#242424','Preto'],['#0F766E','Petróleo'],['#475569','Cinza']];
+const ANTIGO={'🏦':'banco','👛':'carteira','💳':'cartao','🐷':'poupanca','📈':'invest','💵':'dinheiro'};
+function corSugerida(nome){const n=semAcento(nome);
+  if(/nubank|\bnu\b/.test(n))return'#8A05BE';if(/\binter\b/.test(n))return'#FF7A00';if(/itau/.test(n))return'#EC7000';
+  if(/picpay/.test(n))return'#21C25E';if(/mercado ?pago/.test(n))return'#00B1EA';if(/caixa/.test(n))return'#005CA9';
+  if(/santander|bradesco/.test(n))return'#CC092F';if(/banco do brasil|\bbb\b/.test(n))return'#E8B500';if(/\bc6\b/.test(n))return'#242424';
+  if(/carteira|dinheiro/.test(n))return'#0F766E';return null}
+function icSugerido(nome){const n=semAcento(nome);
+  if(/carteira/.test(n))return'carteira';if(/dinheiro|especie/.test(n))return'dinheiro';if(/poupanca|reserva/.test(n))return'poupanca';
+  if(/invest|corretora|xp|rico|clear|tesouro|cdb/.test(n))return'invest';if(/cartao|credito/.test(n))return'cartao';
+  if(/nubank|\bnu\b|inter|picpay|c6|mercado ?pago|neon|next|digital/.test(n))return'digital';return null}
+const chaveIc=c=>ICONES[c.ic]?c.ic:(ANTIGO[c.ic]||'banco');
+const corIc=c=>c.cor||(chaveIc(c)==='carteira'||chaveIc(c)==='dinheiro'?'#0F766E':'#3B82F6');
+const icConta=(c,st='')=>`<div class="icx" style="background:${corIc(c)};${st}">${SVG(ICONES[chaveIc(c)].p)}</div>`;
 // ---- Caixinhas: sub-contas dentro de uma conta (ex.: Nubank › Viagem) ----
 const ehCx=c=>!!(c&&c.pai);
 const principais=()=>D.contas.filter(c=>!c.pai);
@@ -764,7 +801,7 @@ function zerar(){if(confirm('Apagar TUDO? Isso não pode ser desfeito (inclusive
 // ================== FORMULÁRIOS ==================
 function abrir(h){$('#modal').innerHTML=`<div class="modal" onclick="if(event.target===this)fechar()"><div class="sheet">${h}</div></div>`}
 function fechar(){$('#modal').innerHTML='';if(remotoPendente){const r=remotoPendente;remotoPendente=null;aplicaRemoto(...r)}else render()}
-const optsConta=sel=>principais().map(c=>[c,...caixinhas(c.id)]).flat().map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.pai?'\u00a0\u00a0\u00a0↳ '+(c.ic||'🐷')+' '+esc(nomeConta(c.id)):c.ic+' '+esc(c.nome)}</option>`).join('');
+const optsConta=sel=>principais().map(c=>[c,...caixinhas(c.id)]).flat().map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.pai?'\u00a0\u00a0\u00a0↳ '+(c.ic||'🐷')+' '+esc(nomeConta(c.id)):esc(c.nome)}</option>`).join('');
 const optsCat=(t,sel)=>Object.keys(CATS[t]).map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
 
 function formLanc(id,pre){
@@ -865,7 +902,7 @@ function listaContas(edicao){
   const h=hoje();
   return principais().map(c=>{
     const cx=caixinhas(c.id),sd=saldoConta(c.id,h),tot=sd+cx.reduce((a,x)=>a+saldoConta(x.id,h),0);
-    return`<div class="item" ${edicao?`onclick="formConta('${c.id}')"`:''}><div class="ic">${c.ic||'🏦'}</div>
+    return`<div class="item" ${edicao?`onclick="formConta('${c.id}')"`:''}>${icConta(c)}
       <div class="info"><b>${esc(c.nome)}</b><small>${cx.length?'Disponível '+R(sd):edicao?'Saldo inicial '+R(c.saldoIni):''}</small></div>
       <div class="val ${tot<0?'neg':''}">${R(tot)}</div></div>`+
     cx.map(x=>{const s=saldoConta(x.id,h);return`<div class="item" style="padding-left:22px">
@@ -918,18 +955,29 @@ function formCaixinha(paiId,id){
   };
 }
 function formConta(id){
-  const c=id?conta(id):{nome:'',ic:'🏦',saldoIni:0};
+  const c=id?conta(id):{nome:'',ic:'banco',cor:'#3B82F6',saldoIni:0};
+  let ic=chaveIc(c),cor=corIc(c),icManual=!!id,corManual=!!id;
   abrir(`<h2>${id?'Editar':'Nova'} conta</h2>
-   <label>Nome</label><input id="cn" placeholder="Ex.: Nubank, Itaú, Poupança" value="${esc(c.nome)}">
-   <label>Ícone</label><select id="ci">${['🏦','👛','💳','🐷','📈','💵'].map(i=>`<option ${i===c.ic?'selected':''}>${i}</option>`).join('')}</select>
+   <div class="prevConta" id="prev"></div>
+   <label>Nome</label><input id="cn" placeholder="Ex.: Nubank, Itaú, Carteira" value="${esc(c.nome)}">
+   <label>Ícone</label><div class="gIc">${Object.entries(ICONES).map(([k,v])=>`<button data-ic="${k}">${SVG(v.p)}<span>${v.n}</span></button>`).join('')}</div>
+   <label>Cor</label><div class="gCor">${CORES_CONTA.map(([h,n])=>`<button data-cor="${h}" title="${n}" style="background:${h}"></button>`).join('')}</div>
    <label>Saldo inicial (R$)</label><input id="cs" inputmode="decimal" value="${String(c.saldoIni).replace('.',',')}">
    ${id?`<label style="margin-top:16px">🐷 Caixinhas desta conta</label>
      ${caixinhas(id).map(x=>`<div class="item" onclick="formCaixinha('${id}','${x.id}')"><div class="ic">${x.ic||'🐷'}</div><div class="info"><b>${esc(x.nome)}</b></div><div class="val pos">${R(saldoConta(x.id,hoje()))}</div></div>`).join('')||'<small style="color:var(--mut);font-size:12px">Nenhuma ainda. Separe parte do saldo como no app do banco.</small>'}
      <button class="btn sec" style="margin-top:8px" onclick="formCaixinha('${id}')">+ Nova caixinha</button>`:''}
    <div class="linha">${id&&principais().length>1?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
+  const pinta=()=>{
+    document.querySelectorAll('.gIc button').forEach(b=>b.classList.toggle('on',b.dataset.ic===ic));
+    document.querySelectorAll('.gCor button').forEach(b=>b.classList.toggle('on',b.dataset.cor===cor));
+    $('#prev').innerHTML=icConta({ic,cor})+`<div><b>${esc($('#cn').value.trim()||'Nome da conta')}</b><br><small style="color:var(--mut)">Prévia</small></div>`};
+  document.querySelectorAll('.gIc button').forEach(b=>b.onclick=()=>{ic=b.dataset.ic;icManual=true;pinta()});
+  document.querySelectorAll('.gCor button').forEach(b=>b.onclick=()=>{cor=b.dataset.cor;corManual=true;pinta()});
+  $('#cn').oninput=()=>{const n=$('#cn').value;if(!icManual){const s=icSugerido(n);if(s)ic=s}if(!corManual){const s=corSugerida(n);if(s)cor=s}pinta()};
+  pinta();
   if($('#del'))$('#del').onclick=()=>{if(caixinhas(id).length)return alert('Exclua as caixinhas desta conta antes.');if(D.lancs.some(l=>l.conta===id||l.dest===id))return alert('Essa conta tem lançamentos. Exclua ou mova os lançamentos antes.');
     if(confirm('Excluir conta?')){D.contas=D.contas.filter(x=>x.id!==id);salva();fechar()}};
-  $('#ok').onclick=()=>{const s=$('#cs').value.trim(),neg=s.startsWith('-');const o={nome:$('#cn').value.trim(),ic:$('#ci').value,saldoIni:(neg?-1:1)*num(s.replace('-',''))};
+  $('#ok').onclick=()=>{const s=$('#cs').value.trim(),neg=s.startsWith('-');const o={nome:$('#cn').value.trim(),ic,cor,saldoIni:(neg?-1:1)*num(s.replace('-',''))};
     if(!o.nome)return alert('Informe o nome');if(id)Object.assign(c,o);else D.contas.push({...o,id:uid()});salva();fechar()};
 }
 
