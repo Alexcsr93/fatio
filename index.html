@@ -86,6 +86,7 @@ canvas{max-width:100%}
 .rapido button.ouvindo{background:#b91c1c;animation:pulsa 1s infinite}
 @keyframes pulsa{50%{opacity:.55}}
 .dica-rap{color:var(--mut);font-size:12px;margin:0 2px 12px}
+.ola{font-size:17px;font-weight:700;margin:2px 2px 10px}.ola small{display:block;font-size:13px;font-weight:500;color:var(--mut);margin-top:2px}.ola a{color:var(--azul);font-weight:600;cursor:pointer}
 .dica{display:flex;gap:8px;padding:9px 0;border-bottom:1px solid var(--borda);font-size:14px;line-height:1.45}
 .dica:last-child{border-bottom:none}
 .diario .grande{font-size:28px}
@@ -414,7 +415,42 @@ function txtReserva(m){
 }
 // base do cálculo diário: 'entradas' (padrão) ou 'saldo'
 const baseDiaria=()=>D.baseDiaria==='saldo'?'saldo':'entradas';
+function primeiroNome(n){n=String(n||'').trim().split(/\s+/)[0]||'';return n.charAt(0).toUpperCase()+n.slice(1)}
+function saudacao(){const hr=new Date().getHours();return hr>=5&&hr<12?'Bom dia':hr>=12&&hr<18?'Boa tarde':'Boa noite'}
+function fraseContexto(){
+  const h=hoje(),m=h.slice(0,7);
+  const pend=pagarDoMes(m).concat(pagarDoMes(addMes(m,1))).filter(p=>!p.pago);
+  const venc=pend.filter(p=>p.venc<h),sem=pend.filter(p=>p.venc>=h&&p.venc<=addDias(h,7));
+  if(venc.length)return`⚠️ ${venc.length===1?'1 conta vencida':venc.length+' contas vencidas'} sem pagamento`;
+  if(sem.length){const hj=sem.filter(p=>p.venc===h).length;
+    return hj?`⏰ ${hj===1?'1 conta vence':hj+' contas vencem'} hoje`:`⏰ ${sem.length===1?'1 conta vence':sem.length+' contas vencem'} nos próximos 7 dias`}
+  const d=window._diario;
+  if(d){
+    if(d.zero)return'🔻 O orçamento do mês já está no limite';
+    if(d.porDia>0){const p=d.gHoje/d.porDia;
+      if(p>1)return`🔻 Você passou ${R(d.gHoje-d.porDia)} do limite de hoje`;
+      if(p>=.75)return'🟡 Perto do limite de hoje';
+      if(d.gHoje>0)return`✅ Dentro do limite de hoje · restam ${R(d.porDia-d.gHoje)}`;
+      return`✅ Você pode gastar até ${R(d.porDia)} hoje`}
+  }
+  if(d&&d.reservaOk)return'🐷 Reserva do mês cumprida!';
+  return'';
+}
+function linhaOla(){
+  const n=primeiroNome(D.nome),ctx=mes===hoje().slice(0,7)?fraseContexto():'';
+  return`<div class="ola">${saudacao()}${n?', '+esc(n):''} 👋
+    <small>${ctx||(n?'Tudo em dia por aqui':'')}${!n?`${ctx?' · ':''}<a onclick="formNome()">Como quer ser chamado?</a>`:''}</small></div>`;
+}
+function formNome(){
+  abrir(`<h2>👤 Como quer ser chamado?</h2>
+   <label>Seu nome</label><input id="nn" placeholder="Ex.: Alex" value="${esc(D.nome||'')}" maxlength="30" autocomplete="given-name">
+   <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
+  setTimeout(()=>$('#nn').focus(),150);
+  $('#nn').onkeydown=e=>{if(e.key==='Enter')$('#ok').click()};
+  $('#ok').onclick=()=>{const v=$('#nn').value.trim();if(v)D.nome=v.slice(0,30);else delete D.nome;salva();fechar();if(v)toast('Prazer, '+primeiroNome(v)+'! 👋')};
+}
 function cardDiario(){
+  window._diario=null;
   const h=hoje(),m=h.slice(0,7),base=baseDiaria();
   const tit=`<h3>📅 Quanto posso gastar por dia <button class="btnp" onclick="formReserva()">⚙️ Ajustar</button></h3>`;
   const rodapeBase=`<small style="margin-top:8px;opacity:.8">Base: ${base==='entradas'?'📥 entradas do mês':'💳 saldo das contas'}${D.reserva&&D.reserva.v>0?' · 🐷 reserva de '+txtReserva(m):''}</small>`;
@@ -444,6 +480,7 @@ function cardDiario(){
       <div class="barra"><i style="width:${Math.min(100,guard/res*100)}%;background:var(--verde)"></i></div>
       ${guard>=res?'<small style="color:var(--verde)">✅ Meta de reserva do mês cumprida!</small>':D.contas.some(ehCx)?'':'<small>Crie uma caixinha em ⚙️ Mais → Contas para guardar.</small>'}</div>`
     :semRenda?`<small style="margin-top:8px">🐷 Reserva de ${String(D.reserva.v).replace('.',',')}% definida, mas ainda não há receitas lançadas neste mês.</small>`:'';
+  window._diario={zero:disp<0||livre<0,porDia,gHoje,reservaOk:res>0&&guard>=res};
   if(disp<0)return`<div class="card diario">${tit}
     <div class="grande neg">R$ 0,00</div><small>⚠️ ${base==='entradas'?`Você já comprometeu <b>${R(-disp)}</b> a mais do que entrou este mês. Está usando dinheiro de meses anteriores.`:`O saldo não cobre os compromissos do mês: faltam <b>${R(-disp)}</b>.`}${res>0?' Não sobra nada para a reserva este mês.':''}</small>${rodapeBase}</div>`;
   if(livre<0)return`<div class="card diario">${tit}
@@ -546,7 +583,9 @@ function tInicio(){
   const cats=Object.entries(gc).sort((a,b)=>b[1]-a[1]);
   const orcAlerta=Object.entries(D.orc).filter(([c,v])=>v>0&&(gc[c]||0)>=v*.9);
   const totPend=soma(pend),st=saldoTotal(h),temCx=D.contas.some(ehCx);
+  window._diario=null;const cd=mes===h.slice(0,7)?cardDiario():'';
   $('#app').innerHTML=`
+  ${linhaOla()}
   ${barraRapida()}
   ${venc.length?`<div class="alerta">⚠️ ${venc.length} conta(s) vencida(s) sem pagamento: ${venc.map(p=>esc(p.desc)).join(', ')}</div>`:''}
   ${prox.length?`<div class="alerta">⏰ Vence em até 5 dias: ${prox.map(p=>esc(p.desc)+' ('+dataBR(p.venc)+')').join(', ')}</div>`:''}
@@ -562,7 +601,7 @@ function tInicio(){
       <div class="mini"><small>Falta pagar no mês</small><b class="amar">${R(totPend)}</b></div>
     </div>
   </div>
-  ${mes===h.slice(0,7)?cardDiario():''}
+  ${cd}
   ${cardDicas()}
   <div class="card"><h3>Minhas contas</h3>${listaContas(false)}</div>
   <div class="card"><h3>Gastos por categoria</h3>
@@ -678,6 +717,7 @@ function tMais(){
     :window.modoLocal?`<p style="color:var(--mut);font-size:13px">Sincronização não configurada (falta preencher o config.js).</p>`
     :`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">Você está usando sem conta. Entre para sincronizar com outros aparelhos.</p><button class="btn" onclick="localStorage.removeItem('semConta');mostrarLogin(true)">Entrar / criar conta</button>`}
   </div>
+  <div class="card"><h3>👤 Seu nome</h3><div class="item" onclick="formNome()" style="padding:0"><div class="info"><b>${D.nome?esc(D.nome):'Não definido'}</b><small>Usado na saudação da tela inicial</small></div><button class="btnp">✏️ Alterar</button></div></div>
   <div class="card"><h3>🔒 Bloqueio por PIN</h3>
     ${temPin()?`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">Ativado neste aparelho. O app pede o PIN ao abrir e depois de 1 minuto fora dele.</p>
       <div class="linha" style="margin-top:0"><button class="btn sec" onclick="alterarPin()">Alterar PIN</button><button class="btn sec" onclick="desativarPin()">Desativar</button></div>`
@@ -1084,7 +1124,7 @@ if(!cfg||!cfg.apiKey||cfg.apiKey.includes('COLE')){
     unsub=F.onSnapshot(ref,snap=>{
       if(snap.metadata.hasPendingWrites)return;
       if(primeiro){primeiro=false;
-        if(!snap.exists()){D.sincUid=u.uid;salva();if(aba==='mais')render();return}
+        if(!snap.exists()){D.sincUid=u.uid;if(!D.nome&&u.displayName)D.nome=primeiroNome(u.displayName);salva();render();return}
         const r=snap.data(),remoto=JSON.parse(r.dados);
         if(D.sincUid===u.uid){if((D.atualizado||0)>(r.atualizado||0))nuvemSalvar();else aplicaRemoto(remoto,u.uid)}
         else if(tem(D)&&tem(remoto)){
@@ -1092,7 +1132,8 @@ if(!cfg||!cfg.apiKey||cfg.apiKey.includes('COLE')){
           else{D.sincUid=u.uid;salva()}
         }else if(tem(D)){D.sincUid=u.uid;salva()}
         else aplicaRemoto(remoto,u.uid);
-        setSync('☁️ Sincronizado');if(aba==='mais')render();return}
+        if(!D.nome&&u.displayName){D.nome=primeiroNome(u.displayName);salva()}
+        setSync('☁️ Sincronizado');render();return}
       const r=snap.data();if(!r)return;
       if((r.atualizado||0)>(D.atualizado||0))aplicaRemoto(JSON.parse(r.dados),u.uid,true);
       setSync('☁️ Sincronizado');
