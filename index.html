@@ -222,6 +222,20 @@ function saldoConta(id,ate){
   return Math.round(s*100)/100;
 }
 const saldoTotal=ate=>D.contas.reduce((a,c)=>a+saldoConta(c.id,ate),0);
+// ---- Caixinhas: sub-contas dentro de uma conta (ex.: Nubank › Viagem) ----
+const ehCx=c=>!!(c&&c.pai);
+const principais=()=>D.contas.filter(c=>!c.pai);
+const caixinhas=paiId=>D.contas.filter(c=>c.pai===paiId);
+const nomeConta=id=>{const c=conta(id);if(!c)return'';const p=c.pai&&conta(c.pai);return p?p.nome+' › '+c.nome:c.nome};
+const saldoDisponivel=ate=>principais().reduce((a,c)=>a+saldoConta(c.id,ate),0);
+const saldoGuardado=ate=>D.contas.filter(ehCx).reduce((a,c)=>a+saldoConta(c.id,ate),0);
+// líquido guardado nas caixinhas no mês (transferências entre conta e caixinha)
+function guardadoNoMes(m){
+  let g=0;doMes(m).forEach(l=>{if(l.tipo!=='transf')return;
+    const o=conta(l.conta),d=conta(l.dest);
+    if(!ehCx(o)&&ehCx(d))g+=l.valor;else if(ehCx(o)&&!ehCx(d))g-=l.valor});
+  return Math.round(g*100)/100;
+}
 const doMes=m=>D.lancs.filter(l=>l.data.slice(0,7)===m);
 function resumo(m){let r=0,d=0;doMes(m).forEach(l=>{if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
 function gastoCat(m){const o={};doMes(m).filter(l=>l.tipo==='despesa').forEach(l=>o[l.cat]=(o[l.cat]||0)+l.valor);return o}
@@ -318,13 +332,13 @@ function parseRapido(txt){
   // tipo por palavra
   tk.forEach(t=>{if(t.rm)return;if(VERB_R.has(t.n)){tipo=tipo||'receita';t.rm=true}else if(VERB_D.has(t.n)){tipo=tipo||'despesa';t.rm=true}});
   // conta
-  for(const c of D.contas){
+  for(const c of principais()){
     const nt=semAcento(c.nome).split(/\s+/).filter(Boolean);
     for(let i=0;i+nt.length<=tk.length;i++){
       if(nt.every((w,j)=>!tk[i+j].rm&&tk[i+j].n===w)){contaId=c.id;for(let j=0;j<nt.length;j++)tk[i+j].rm=true;break}}
     if(contaId)break;
   }
-  if(!contaId)for(const c of D.contas){
+  if(!contaId)for(const c of principais()){
     for(const w of semAcento(c.nome).split(/\s+/)){
       if(w.length<4||['conta','banco','corrente','cartao'].includes(w))continue;
       const t=tk.find(x=>!x.rm&&x.n===w);if(t){t.rm=true;contaId=c.id;break}}
@@ -367,7 +381,7 @@ function lancarRapido(txt){
   txt=(txt||'').trim();if(!txt)return;
   const p=parseRapido(txt);
   if(!(p.valor>0)){formLanc(null,p);toast('Não achei o valor. Complete aqui');return}
-  const l={id:uid(),tipo:p.tipo,valor:p.valor,desc:p.desc,cat:p.cat,conta:p.conta||D.contas[0]?.id,data:p.data};
+  const l={id:uid(),tipo:p.tipo,valor:p.valor,desc:p.desc,cat:p.cat,conta:p.conta||principais()[0]?.id,data:p.data};
   D.lancs.push(l);salva();render();
   const c=conta(l.conta);
   toastAcao(`✅ ${l.tipo==='receita'?'Receita':'Despesa'} · ${l.desc||l.cat} · ${R(l.valor)}${c?' · '+c.nome:''}${l.data!==hoje()?' · '+dataBR(l.data):''}`,
@@ -405,20 +419,22 @@ function cardDiario(){
   const doM=doMes(m);
   const futR=soma(doM.filter(l=>l.tipo==='receita'&&l.data>h)),futD=soma(doM.filter(l=>l.tipo==='despesa'&&l.data>h));
   const pend=soma(pagarDoMes(m).filter(p=>!p.pago));
-  const disp=saldoTotal(h)+futR-futD-pend;
-  const res=valorReserva(m),livre=disp-res,porDia=livre/diasRest;
+  const disp=saldoDisponivel(h)+futR-futD-pend;
+  const res=valorReserva(m),jaG=guardadoNoMes(m),falta=Math.max(0,res-jaG),livre=disp-falta,porDia=livre/diasRest;
   const ids=idsDeContas(),gHoje=soma(doM.filter(l=>l.tipo==='despesa'&&l.data===h&&!ids.has(l.id)));
   const semRenda=D.reserva&&D.reserva.tipo==='pct'&&D.reserva.v>0&&resumo(m).r===0;
-  const linhaRes=res>0?`<div class="mini" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center"><small>🐷 Guardando este mês</small><b class="pos" style="font-size:15px;margin:0">${R(res)}</b></div>`
+  const linhaRes=res>0?`<div class="mini" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center"><small>🐷 Guardado este mês</small><b class="pos" style="font-size:15px;margin:0">${R(Math.max(0,jaG))} de ${R(res)}</b></div>
+      <div class="barra"><i style="width:${Math.min(100,Math.max(0,jaG)/res*100)}%;background:var(--verde)"></i></div>
+      ${jaG>=res?'<small style="color:var(--verde)">✅ Meta de reserva do mês cumprida!</small>':D.contas.some(ehCx)?'':'<small>Crie uma caixinha em ⚙️ Mais → Contas para guardar.</small>'}</div>`
     :semRenda?`<small style="margin-top:8px">🐷 Reserva de ${String(D.reserva.v).replace('.',',')}% definida, mas ainda não há receitas lançadas neste mês.</small>`:'';
   if(disp<0)return`<div class="card diario">${tit}
     <div class="grande neg">R$ 0,00</div><small>⚠️ O saldo não cobre os compromissos do mês: faltam <b>${R(-disp)}</b> para as contas a pagar e lançamentos previstos${res>0?'. Não sobra nada para a reserva este mês':''}.</small></div>`;
   if(livre<0)return`<div class="card diario">${tit}
-    <div class="grande neg">R$ 0,00</div><small>⚠️ Para guardar ${R(res)} este mês, faltam <b>${R(-livre)}</b>. Depois das contas, sobram ${R(disp)}. Diminua os gastos ou ajuste a reserva.</small>${linhaRes}</div>`;
+    <div class="grande neg">R$ 0,00</div><small>⚠️ Para guardar o que falta da reserva (${R(falta)}), faltam <b>${R(-livre)}</b>. Depois das contas, sobram ${R(disp)}. Diminua os gastos ou ajuste a reserva.</small>${linhaRes}</div>`;
   const p=porDia>0?gHoje/porDia*100:0,cor=p>=100?'var(--verm)':p>=75?'var(--amar)':'var(--verde)';
   return`<div class="card diario">${tit}
     <div class="grande pos">${R(porDia)}</div>
-    <small>Para ${diasRest===1?'hoje, último dia do mês':'os próximos '+diasRest+' dias'}, já descontando ${R(pend)} de contas a pagar${futD||futR?', os lançamentos previstos':''}${res>0?' e a sua reserva':''}.</small>
+    <small>Para ${diasRest===1?'hoje, último dia do mês':'os próximos '+diasRest+' dias'}, já descontando ${R(pend)} de contas a pagar${futD||futR?', os lançamentos previstos':''}${falta>0?' e o que falta guardar ('+R(falta)+')':''}. Não conta o dinheiro das caixinhas.</small>
     ${linhaRes}
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:10px"><span>Gasto hoje</span><b>${R(gHoje)} de ${R(porDia)}</b></div>
     <div class="barra"><i style="width:${Math.min(100,p)}%;background:${cor}"></i></div></div>`;
@@ -503,7 +519,7 @@ function tInicio(){
   const venc=pend.filter(p=>p.venc<h),prox=pend.filter(p=>p.venc>=h&&p.venc<=addDias(h,5));
   const cats=Object.entries(gc).sort((a,b)=>b[1]-a[1]);
   const orcAlerta=Object.entries(D.orc).filter(([c,v])=>v>0&&(gc[c]||0)>=v*.9);
-  const totPend=soma(pend),st=saldoTotal(h);
+  const totPend=soma(pend),st=saldoTotal(h),temCx=D.contas.some(ehCx);
   $('#app').innerHTML=`
   ${barraRapida()}
   ${venc.length?`<div class="alerta">⚠️ ${venc.length} conta(s) vencida(s) sem pagamento: ${venc.map(p=>esc(p.desc)).join(', ')}</div>`:''}
@@ -512,6 +528,7 @@ function tInicio(){
   <div class="card">
     <h3>Saldo total hoje <button class="olho" onclick="D.oculto=!D.oculto;salva();render()">${D.oculto?'🙈':'👁️'}</button></h3>
     <div class="grande ${st<0?'neg':''}">${R(st)}</div>
+    ${temCx?`<div class="grid2" style="margin-top:10px"><div class="mini"><small>💳 Disponível</small><b>${R(saldoDisponivel(h))}</b></div><div class="mini"><small>🐷 Guardado em caixinhas</small><b class="pos">${R(saldoGuardado(h))}</b></div></div>`:''}
     <div class="grid2" style="margin-top:12px">
       <div class="mini"><small>Receitas do mês</small><b class="pos">${R(r.r)}</b></div>
       <div class="mini"><small>Despesas do mês</small><b class="neg">${R(r.d)}</b></div>
@@ -521,9 +538,7 @@ function tInicio(){
   </div>
   ${mes===h.slice(0,7)?cardDiario():''}
   ${cardDicas()}
-  <div class="card"><h3>Minhas contas</h3>
-    ${D.contas.map(c=>{const s=saldoConta(c.id,h);return`<div class="item"><div class="ic">${c.ic||'🏦'}</div><div class="info"><b>${esc(c.nome)}</b></div><div class="val ${s<0?'neg':''}">${R(s)}</div></div>`}).join('')}
-  </div>
+  <div class="card"><h3>Minhas contas</h3>${listaContas(false)}</div>
   <div class="card"><h3>Gastos por categoria</h3>
     ${cats.length?`<canvas id="pizza" height="180"></canvas><div class="legenda" id="leg"></div>`:'<div class="vazio">Nenhuma despesa neste mês</div>'}
   </div>
@@ -560,7 +575,7 @@ function tLanc(){
   ls.forEach(l=>{if(l.data!==dia){dia=l.data;html+=`<div style="color:var(--mut);font-size:12px;margin:10px 0 2px">${new Date(dia+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'})}</div>`}
     const t=l.tipo==='transf';
     html+=`<div class="item" onclick="formLanc('${l.id}')"><div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
-      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(conta(l.conta)?.nome)+' → '+esc(conta(l.dest)?.nome):esc(l.cat)+' · '+esc(conta(l.conta)?.nome||'')}</small></div>
+      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}</small></div>
       <div class="val ${l.tipo==='receita'?'pos':l.tipo==='despesa'?'neg':''}">${l.tipo==='despesa'?'-':l.tipo==='receita'?'+':''}${R(l.valor)}</div></div>`});
   $('#app').innerHTML=`${barraRapida()}<div class="chips">${[['todos','Todos'],['despesa','Despesas'],['receita','Receitas'],['transf','Transferências']].map(([k,n])=>`<button class="chip ${filtro===k?'on':''}" onclick="filtro='${k}';render()">${n}</button>`).join('')}</div>
    <div class="card">${html||'<div class="vazio">Nenhum lançamento neste mês.<br>Toque no + ou use o campo acima.</div>'}</div>`;
@@ -643,7 +658,8 @@ function tMais(){
     :`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">Proteja o app com um PIN de 4 dígitos. Vale só para este aparelho.</p><button class="btn" onclick="ativarPin()">Ativar PIN</button>`}
   </div>
   <div class="card"><h3>Contas e carteiras <button class="btnp" onclick="formConta()">+ Conta</button></h3>
-    ${D.contas.map(c=>`<div class="item" onclick="formConta('${c.id}')"><div class="ic">${c.ic||'🏦'}</div><div class="info"><b>${esc(c.nome)}</b><small>Saldo inicial ${R(c.saldoIni)}</small></div><div class="val">${R(saldoConta(c.id,h))}</div></div>`).join('')}
+    ${listaContas(true)}
+    <p style="color:var(--mut);font-size:12px;margin-top:8px">🐷 Caixinhas separam parte do dinheiro dentro da conta (como no Nubank e no PicPay). Toque numa conta para criar.</p>
   </div>
   <div class="card"><h3>💾 Backup dos seus dados</h3>
     <p style="color:var(--mut);font-size:13px;margin-bottom:10px">Uma cópia extra de segurança, além da nuvem.</p>
@@ -658,7 +674,7 @@ function tMais(){
 }
 function baixar(nome,txt,tipo){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:tipo}));a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function exportar(){D.ultBackup=Date.now();salva();baixar('backup-fatio-'+hoje()+'.json',JSON.stringify(D),'application/json');render()}
-function exportarCSV(){const l=[['Data','Tipo','Descrição','Categoria','Conta','Valor']].concat([...D.lancs].sort((a,b)=>a.data.localeCompare(b.data)).map(x=>[x.data.split('-').reverse().join('/'),x.tipo,x.desc||'',x.cat||'',conta(x.conta)?.nome||'',String(x.tipo==='despesa'?-x.valor:x.valor).replace('.',',')]));
+function exportarCSV(){const l=[['Data','Tipo','Descrição','Categoria','Conta','Valor']].concat([...D.lancs].sort((a,b)=>a.data.localeCompare(b.data)).map(x=>[x.data.split('-').reverse().join('/'),x.tipo,x.desc||'',x.cat||'',x.tipo==='transf'?nomeConta(x.conta)+' → '+nomeConta(x.dest):nomeConta(x.conta),String(x.tipo==='despesa'?-x.valor:x.valor).replace('.',',')]));
   baixar('fatio-lancamentos-'+hoje()+'.csv','\ufeff'+l.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n'),'text/csv')}
 function importar(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const n=JSON.parse(r.result);
   if(!n.lancs||!n.contas)throw 0;if(confirm('Substituir os dados atuais pelo backup?')){const u=D.sincUid;D=n;norm();D.sincUid=u;salva();toast('✅ Backup restaurado');render()}}catch(_){alert('Arquivo de backup inválido')}};r.readAsText(f);e.target.value=''}
@@ -667,12 +683,12 @@ function zerar(){if(confirm('Apagar TUDO? Isso não pode ser desfeito (inclusive
 // ================== FORMULÁRIOS ==================
 function abrir(h){$('#modal').innerHTML=`<div class="modal" onclick="if(event.target===this)fechar()"><div class="sheet">${h}</div></div>`}
 function fechar(){$('#modal').innerHTML='';if(remotoPendente){const r=remotoPendente;remotoPendente=null;aplicaRemoto(...r)}else render()}
-const optsConta=sel=>D.contas.map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.ic} ${esc(c.nome)}</option>`).join('');
+const optsConta=sel=>principais().map(c=>[c,...caixinhas(c.id)]).flat().map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.pai?'\u00a0\u00a0\u00a0↳ '+(c.ic||'🐷')+' '+esc(nomeConta(c.id)):c.ic+' '+esc(c.nome)}</option>`).join('');
 const optsCat=(t,sel)=>Object.keys(CATS[t]).map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join('');
 
 function formLanc(id,pre){
   pre=pre||{};
-  const l=id?D.lancs.find(x=>x.id===id):{tipo:pre.tipo||'despesa',valor:pre.valor||'',desc:pre.desc||'',cat:pre.cat||'',conta:pre.conta||D.contas[0]?.id,data:pre.data||(mes===hoje().slice(0,7)?hoje():mes+'-01')};
+  const l=id?D.lancs.find(x=>x.id===id):{tipo:pre.tipo||'despesa',valor:pre.valor||'',desc:pre.desc||'',cat:pre.cat||'',conta:pre.conta||principais()[0]?.id,data:pre.data||(mes===hoje().slice(0,7)?hoje():mes+'-01')};
   if(!l)return;
   let tipo=l.tipo,catManual=!!id||!!pre.cat;
   abrir(`<h2>${id?'Editar':l.tipo==='receita'&&!pre.desc?'Nova receita':l.tipo==='despesa'&&!pre.desc&&!pre.valor&&pre.tipo?'Nova despesa':'Novo lançamento'}</h2>
@@ -681,7 +697,7 @@ function formLanc(id,pre){
    <label>Descrição</label><input id="fd" placeholder="Ex.: Mercado do mês" value="${esc(l.desc)}" autocomplete="off">
    <div id="bCat"><label>Categoria <span id="hintCat"></span></label><select id="fc"></select></div>
    <label id="lConta">Conta</label><select id="fa">${optsConta(l.conta)}</select>
-   <div id="bDest"><label>Para a conta</label><select id="fdst">${optsConta(l.dest||D.contas[1]?.id)}</select></div>
+   <div id="bDest"><label>Para a conta</label><select id="fdst">${optsConta(l.dest||principais()[1]?.id)}</select></div>
    <label>Data</label><input id="fdt" type="date" value="${l.data}">
    ${!id?`<div class="check"><input type="checkbox" id="frep"><span>Repetir nos próximos meses</span></div>
    <div id="bQtd" class="oculto"><label>Quantas vezes no total (ex.: parcelas)</label><input id="fqtd" type="number" min="2" max="120" value="12"></div>`:''}
@@ -764,14 +780,73 @@ function formOrc(){
    <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
   $('#ok').onclick=()=>{document.querySelectorAll('.oi').forEach(i=>{const v=num(i.value);if(v>0)D.orc[i.dataset.c]=v;else delete D.orc[i.dataset.c]});salva();fechar()};
 }
+function listaContas(edicao){
+  const h=hoje();
+  return principais().map(c=>{
+    const cx=caixinhas(c.id),sd=saldoConta(c.id,h),tot=sd+cx.reduce((a,x)=>a+saldoConta(x.id,h),0);
+    return`<div class="item" ${edicao?`onclick="formConta('${c.id}')"`:''}><div class="ic">${c.ic||'🏦'}</div>
+      <div class="info"><b>${esc(c.nome)}</b><small>${cx.length?'Disponível '+R(sd):edicao?'Saldo inicial '+R(c.saldoIni):''}</small></div>
+      <div class="val ${tot<0?'neg':''}">${R(tot)}</div></div>`+
+    cx.map(x=>{const s=saldoConta(x.id,h);return`<div class="item" style="padding-left:22px">
+      <div class="ic" style="width:32px;height:32px;font-size:16px">${x.ic||'🐷'}</div>
+      <div class="info" ${edicao?`onclick="formCaixinha('${c.id}','${x.id}')"`:''}><b>${esc(x.nome)}</b><small>Caixinha${x.alvo?' · meta '+R(x.alvo):''}</small>
+        ${x.alvo?`<div class="barra" style="height:5px"><i style="width:${Math.min(100,Math.max(0,s)/x.alvo*100)}%;background:var(--roxo)"></i></div>`:''}</div>
+      <div style="text-align:right"><div class="val pos">${R(s)}</div>
+      <div style="display:flex;gap:4px;margin-top:4px"><button class="btnp" onclick="event.stopPropagation();movCaixinha('${x.id}',1)">+ Guardar</button><button class="btnp" onclick="event.stopPropagation();movCaixinha('${x.id}',-1)">Resgatar</button></div></div></div>`}).join('');
+  }).join('');
+}
+function movCaixinha(id,sinal){
+  const x=conta(id),p=conta(x.pai),h=hoje();
+  const max=sinal>0?saldoConta(p.id,h):saldoConta(x.id,h);
+  abrir(`<h2>${sinal>0?'Guardar em':'Resgatar de'} ${esc(x.nome)}</h2>
+   <p style="color:var(--mut);font-size:13px">${sinal>0?'Sai do disponível do '+esc(p.nome)+' ('+R(max)+')':'Volta para o disponível do '+esc(p.nome)+'. Na caixinha: '+R(max)}</p>
+   <label>Valor (R$)</label><input id="xv" inputmode="decimal" placeholder="0,00">
+   ${sinal<0&&max>0?`<button class="btnp" style="margin-top:8px" onclick="$('#xv').value='${String(max).replace('.',',')}'">Resgatar tudo</button>`:''}
+   <label>Data</label><input id="xd" type="date" value="${h}">
+   <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Confirmar</button></div>`);
+  setTimeout(()=>$('#xv').focus(),150);
+  $('#ok').onclick=()=>{
+    const v=num($('#xv').value);if(v<=0)return alert('Informe o valor');
+    if(v>max+0.001&&!confirm(sinal>0?'O valor é maior que o disponível na conta. Guardar mesmo assim?':'O valor é maior que o saldo da caixinha. Continuar?'))return;
+    D.lancs.push({id:uid(),tipo:'transf',valor:v,desc:(sinal>0?'Guardar em ':'Resgate de ')+x.nome,cat:'',conta:sinal>0?p.id:x.id,dest:sinal>0?x.id:p.id,data:$('#xd').value||h});
+    salva();fechar();toast(sinal>0?'🐷 Guardado!':'💳 Resgatado para o disponível');
+  };
+}
+function formCaixinha(paiId,id){
+  const p=conta(paiId),x=id?conta(id):{nome:'',ic:'🐷',saldoIni:0,alvo:0};
+  abrir(`<h2>${id?'Editar':'Nova'} caixinha em ${esc(p.nome)}</h2>
+   <label>Nome</label><input id="xn" placeholder="Ex.: Reserva de emergência, Viagem, IPVA" value="${esc(x.nome)}">
+   <label>Ícone</label><select id="xi">${['🐷','🛟','✈️','🏠','🚗','🎓','🎁','📈','🧸','💰'].map(i=>`<option ${i===x.ic?'selected':''}>${i}</option>`).join('')}</select>
+   ${id?'':`<label>Quanto já tem guardado nela hoje (R$)</label><input id="xs" inputmode="decimal" placeholder="0,00">
+   <small style="color:var(--mut);font-size:12px;display:block;margin-top:4px">Use o valor que o app do banco mostra na caixinha. Ele não sai do disponível da conta.</small>`}
+   <label>Meta da caixinha (opcional, R$)</label><input id="xa" inputmode="decimal" value="${x.alvo?String(x.alvo).replace('.',','):''}">
+   <div class="linha">${id?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
+  if(id)$('#del').onclick=()=>{
+    const s=saldoConta(id,hoje());
+    if(!confirm(`Excluir a caixinha "${x.nome}"?${s?'\n\nO saldo dela ('+R(s)+') volta para o disponível do '+p.nome+'.':''}`))return;
+    D.lancs=D.lancs.filter(l=>!(l.tipo==='transf'&&((l.conta===id&&l.dest===paiId)||(l.conta===paiId&&l.dest===id))));
+    D.lancs.forEach(l=>{if(l.conta===id)l.conta=paiId;if(l.dest===id)l.dest=paiId});
+    p.saldoIni=Math.round((p.saldoIni+(x.saldoIni||0))*100)/100;
+    D.contas=D.contas.filter(c=>c.id!==id);salva();fechar();toast('Caixinha excluída');
+  };
+  $('#ok').onclick=()=>{
+    const o={nome:$('#xn').value.trim(),ic:$('#xi').value,alvo:num($('#xa').value)};
+    if(!o.nome)return alert('Informe o nome');
+    if(id)Object.assign(x,o);else D.contas.push({...o,id:uid(),pai:paiId,saldoIni:num($('#xs').value)});
+    salva();fechar();toast('🐷 Caixinha salva');
+  };
+}
 function formConta(id){
   const c=id?conta(id):{nome:'',ic:'🏦',saldoIni:0};
   abrir(`<h2>${id?'Editar':'Nova'} conta</h2>
    <label>Nome</label><input id="cn" placeholder="Ex.: Nubank, Itaú, Poupança" value="${esc(c.nome)}">
    <label>Ícone</label><select id="ci">${['🏦','👛','💳','🐷','📈','💵'].map(i=>`<option ${i===c.ic?'selected':''}>${i}</option>`).join('')}</select>
    <label>Saldo inicial (R$)</label><input id="cs" inputmode="decimal" value="${String(c.saldoIni).replace('.',',')}">
-   <div class="linha">${id&&D.contas.length>1?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
-  if($('#del'))$('#del').onclick=()=>{if(D.lancs.some(l=>l.conta===id||l.dest===id))return alert('Essa conta tem lançamentos. Exclua ou mova os lançamentos antes.');
+   ${id?`<label style="margin-top:16px">🐷 Caixinhas desta conta</label>
+     ${caixinhas(id).map(x=>`<div class="item" onclick="formCaixinha('${id}','${x.id}')"><div class="ic">${x.ic||'🐷'}</div><div class="info"><b>${esc(x.nome)}</b></div><div class="val pos">${R(saldoConta(x.id,hoje()))}</div></div>`).join('')||'<small style="color:var(--mut);font-size:12px">Nenhuma ainda. Separe parte do saldo como no app do banco.</small>'}
+     <button class="btn sec" style="margin-top:8px" onclick="formCaixinha('${id}')">+ Nova caixinha</button>`:''}
+   <div class="linha">${id&&principais().length>1?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
+  if($('#del'))$('#del').onclick=()=>{if(caixinhas(id).length)return alert('Exclua as caixinhas desta conta antes.');if(D.lancs.some(l=>l.conta===id||l.dest===id))return alert('Essa conta tem lançamentos. Exclua ou mova os lançamentos antes.');
     if(confirm('Excluir conta?')){D.contas=D.contas.filter(x=>x.id!==id);salva();fechar()}};
   $('#ok').onclick=()=>{const s=$('#cs').value.trim(),neg=s.startsWith('-');const o={nome:$('#cn').value.trim(),ic:$('#ci').value,saldoIni:(neg?-1:1)*num(s.replace('-',''))};
     if(!o.nome)return alert('Informe o nome');if(id)Object.assign(c,o);else D.contas.push({...o,id:uid()});salva();fechar()};
