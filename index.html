@@ -386,24 +386,69 @@ function ouvir(){
 }
 
 // ================== ASSISTENTE E "QUANTO POSSO GASTAR" ==================
+// reserva mensal: D.reserva = {tipo:'valor'|'pct', v:numero}
+function valorReserva(m){
+  const rs=D.reserva;if(!rs||!(rs.v>0))return 0;
+  if(rs.tipo==='pct')return Math.round(resumo(m).r*Math.min(rs.v,100))/100;
+  return rs.v;
+}
+function txtReserva(m){
+  const rs=D.reserva;if(!rs||!(rs.v>0))return'';
+  return rs.tipo==='pct'?`${String(rs.v).replace('.',',')}% da renda do mês (${R(valorReserva(m))})`:R(rs.v);
+}
 function cardDiario(){
   const h=hoje(),m=h.slice(0,7);
+  const tit=`<h3>📅 Quanto posso gastar por dia <button class="btnp" onclick="formReserva()">${D.reserva&&D.reserva.v>0?'🐷 Reserva':'🐷 Guardar'}</button></h3>`;
   if(D.lancs.length===0&&D.contas.every(c=>!c.saldoIni))
-    return`<div class="card diario"><h3>📅 Quanto posso gastar por dia</h3><small>Cadastre o saldo das suas contas em ⚙️ Mais e suas contas fixas em 🧾 A pagar para calcular.</small></div>`;
+    return`<div class="card diario">${tit}<small>Cadastre o saldo das suas contas em ⚙️ Mais e suas contas fixas em 🧾 A pagar para calcular.</small></div>`;
   const dia=+h.slice(8),diasRest=ultDia(m)-dia+1;
   const doM=doMes(m);
   const futR=soma(doM.filter(l=>l.tipo==='receita'&&l.data>h)),futD=soma(doM.filter(l=>l.tipo==='despesa'&&l.data>h));
   const pend=soma(pagarDoMes(m).filter(p=>!p.pago));
-  const disp=saldoTotal(h)+futR-futD-pend,porDia=disp/diasRest;
+  const disp=saldoTotal(h)+futR-futD-pend;
+  const res=valorReserva(m),livre=disp-res,porDia=livre/diasRest;
   const ids=idsDeContas(),gHoje=soma(doM.filter(l=>l.tipo==='despesa'&&l.data===h&&!ids.has(l.id)));
-  if(disp<0)return`<div class="card diario"><h3>📅 Quanto posso gastar por dia</h3>
-    <div class="grande neg">R$ 0,00</div><small>⚠️ O saldo não cobre os compromissos do mês: faltam <b>${R(-disp)}</b> para as contas a pagar e lançamentos previstos.</small></div>`;
+  const semRenda=D.reserva&&D.reserva.tipo==='pct'&&D.reserva.v>0&&resumo(m).r===0;
+  const linhaRes=res>0?`<div class="mini" style="margin-top:10px;display:flex;justify-content:space-between;align-items:center"><small>🐷 Guardando este mês</small><b class="pos" style="font-size:15px;margin:0">${R(res)}</b></div>`
+    :semRenda?`<small style="margin-top:8px">🐷 Reserva de ${String(D.reserva.v).replace('.',',')}% definida, mas ainda não há receitas lançadas neste mês.</small>`:'';
+  if(disp<0)return`<div class="card diario">${tit}
+    <div class="grande neg">R$ 0,00</div><small>⚠️ O saldo não cobre os compromissos do mês: faltam <b>${R(-disp)}</b> para as contas a pagar e lançamentos previstos${res>0?'. Não sobra nada para a reserva este mês':''}.</small></div>`;
+  if(livre<0)return`<div class="card diario">${tit}
+    <div class="grande neg">R$ 0,00</div><small>⚠️ Para guardar ${R(res)} este mês, faltam <b>${R(-livre)}</b>. Depois das contas, sobram ${R(disp)}. Diminua os gastos ou ajuste a reserva.</small>${linhaRes}</div>`;
   const p=porDia>0?gHoje/porDia*100:0,cor=p>=100?'var(--verm)':p>=75?'var(--amar)':'var(--verde)';
-  return`<div class="card diario"><h3>📅 Quanto posso gastar por dia</h3>
+  return`<div class="card diario">${tit}
     <div class="grande pos">${R(porDia)}</div>
-    <small>Para ${diasRest===1?'hoje, último dia do mês':'os próximos '+diasRest+' dias'}, já descontando ${R(pend)} de contas a pagar${futD||futR?' e os lançamentos previstos':''}.</small>
+    <small>Para ${diasRest===1?'hoje, último dia do mês':'os próximos '+diasRest+' dias'}, já descontando ${R(pend)} de contas a pagar${futD||futR?', os lançamentos previstos':''}${res>0?' e a sua reserva':''}.</small>
+    ${linhaRes}
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:10px"><span>Gasto hoje</span><b>${R(gHoje)} de ${R(porDia)}</b></div>
     <div class="barra"><i style="width:${Math.min(100,p)}%;background:${cor}"></i></div></div>`;
+}
+function formReserva(){
+  const rs=D.reserva||{tipo:'valor',v:0};let tipo=rs.v>0?rs.tipo:'valor';
+  const m=hoje().slice(0,7),renda=resumo(m).r;
+  abrir(`<h2>🐷 Quanto quer guardar por mês?</h2>
+   <p style="color:var(--mut);font-size:13px;margin-bottom:6px">Esse valor sai do cálculo de "quanto posso gastar por dia", para você fechar o mês com ele guardado.</p>
+   <div class="tipos" style="grid-template-columns:1fr 1fr"><button data-k="valor">💵 Valor fixo</button><button data-k="pct">📊 % da renda</button></div>
+   <label id="rLab"></label><input id="rVal" inputmode="decimal" value="${rs.v>0?String(rs.v).replace('.',','):''}">
+   <small id="rInfo" style="color:var(--mut);font-size:12px;display:block;margin-top:6px"></small>
+   <div class="linha">${rs.v>0?'<button class="btn sec" id="rDel" style="width:auto">Remover</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
+  const info=()=>{
+    if(tipo==='pct'){const v=Math.min(100,num($('#rVal').value));
+      $('#rInfo').textContent=renda>0?`Renda lançada neste mês: ${R(renda)} → guardar ${R(renda*v/100)}`:'Ainda não há receitas lançadas neste mês. O valor é calculado quando você lançar sua renda.';}
+    else $('#rInfo').textContent='O mesmo valor vale para todos os meses.';
+  };
+  const atualiza=()=>{document.querySelectorAll('.tipos button').forEach(b=>b.classList.toggle('on',b.dataset.k===tipo));
+    $('#rLab').textContent=tipo==='pct'?'Porcentagem da renda (%)':'Valor por mês (R$)';
+    $('#rVal').placeholder=tipo==='pct'?'Ex.: 10':'Ex.: 500,00';info()};
+  document.querySelectorAll('.tipos button').forEach(b=>b.onclick=()=>{tipo=b.dataset.k;atualiza();$('#rVal').focus()});
+  $('#rVal').oninput=info;atualiza();setTimeout(()=>$('#rVal').focus(),150);
+  if($('#rDel'))$('#rDel').onclick=()=>{delete D.reserva;salva();fechar();toast('Reserva removida')};
+  $('#ok').onclick=()=>{
+    const v=num($('#rVal').value);
+    if(!(v>0)){delete D.reserva;salva();fechar();return}
+    if(tipo==='pct'&&v>100)return alert('A porcentagem deve ser de até 100%');
+    D.reserva={tipo,v};salva();fechar();toast('🐷 Reserva salva');
+  };
 }
 function dicas(m){
   const h=hoje(),mAtual=h.slice(0,7),atual=m===mAtual,passado=m<mAtual;
