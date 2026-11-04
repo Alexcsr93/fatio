@@ -177,7 +177,7 @@ canvas{max-width:100%}
 </div>
 <script>
 // ================== DADOS ==================
-const VERSAO='1.4.0';
+const VERSAO='1.5.0';
 const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
@@ -246,7 +246,7 @@ function addDias(d,n){const x=new Date(d+'T12:00');x.setDate(x.getDate()+n);retu
 // saldo até uma data (lançamentos futuros só contam quando a data chegar)
 function saldoConta(id,ate){
   const c=conta(id);let s=c?c.saldoIni:0;
-  D.lancs.forEach(l=>{if(ate&&l.data>ate)return;
+  D.lancs.forEach(l=>{if(ate&&l.data>ate)return;if(l.grupo)return; // separados têm saldo próprio
     if(l.tipo==='receita'&&l.conta===id)s+=l.valor;
     if(l.tipo==='despesa'&&l.conta===id)s-=l.valor;
     if(l.tipo==='transf'){if(l.conta===id)s-=l.valor;if(l.dest===id)s+=l.valor}});
@@ -293,15 +293,21 @@ function guardadoNoMes(m){
     if(!ehCx(o)&&ehCx(d))g+=l.valor;else if(ehCx(o)&&!ehCx(d))g-=l.valor});
   return Math.round(g*100)/100;
 }
-const doMes=m=>D.lancs.filter(l=>l.data.slice(0,7)===m);
+const doMesTudo=m=>D.lancs.filter(l=>l.data.slice(0,7)===m);
+const doMes=m=>doMesTudo(m).filter(l=>!l.grupo); // fora os separados (📌)
 function resumo(m){let r=0,d=0;doMes(m).forEach(l=>{if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
 function gastoCat(m){const o={};doMes(m).filter(l=>l.tipo==='despesa').forEach(l=>o[l.cat]=(o[l.cat]||0)+l.valor);return o}
 // ---- Gráfico separado: transações marcadas com "📌 Separar do gráfico principal" ----
 // Elas continuam contando no saldo e nos cálculos, só saem dos gráficos principais.
-const grupos=()=>[...new Set(D.lancs.filter(l=>l.grupo).map(l=>l.grupo))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-function resumoGraf(m){let r=0,d=0;doMes(m).forEach(l=>{if(l.grupo)return;if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
-function resumoGrupo(m,g){let r=0,d=0;doMes(m).forEach(l=>{if(l.grupo!==g)return;if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
+const grupos=()=>[...new Set([...D.lancs,...D.pagar,...D.receber].filter(l=>l.grupo).map(l=>l.grupo).concat(Object.keys(D.gruposIni||{})))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+function resumoGraf(m){let r=0,d=0;doMes(m).forEach(l=>{if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
+function resumoGrupo(m,g){let r=0,d=0;doMesTudo(m).forEach(l=>{if(l.grupo!==g)return;if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
 function gastoCatGraf(m){const o={};doMes(m).filter(l=>l.tipo==='despesa'&&!l.grupo).forEach(l=>o[l.cat]=(o[l.cat]||0)+l.valor);return o}
+// saldo próprio de cada grupo: saldo inicial do grupo + entradas - saídas (acumulado até a data)
+function saldoGrupo(g,ate){let s=(D.gruposIni&&D.gruposIni[g])||0;D.lancs.forEach(l=>{if(l.grupo!==g||(ate&&l.data>ate))return;if(l.tipo==='receita')s+=l.valor;if(l.tipo==='despesa')s-=l.valor});return Math.round(s*100)/100}
+// contas a pagar/receber marcadas como separadas também ficam fora dos cálculos principais
+const pagarPrinc=m=>pagarDoMes(m).filter(p=>!p.grupo);
+const receberPrinc=m=>receberDoMes(m).filter(p=>!p.grupo);
 const grafExtraOn=()=>D.grafExtra!==false;
 function grupoAtual(){const gs=grupos();if(!gs.length)return null;return gs.includes(D.grupoSel)?D.grupoSel:gs[0]}
 function pagarDoMes(m){
@@ -502,8 +508,8 @@ function primeiroNome(n){n=String(n||'').trim().split(/\s+/)[0]||'';return n.cha
 function saudacao(){const hr=new Date().getHours();return hr>=5&&hr<12?'Bom dia':hr>=12&&hr<18?'Boa tarde':'Boa noite'}
 function fraseContexto(){
   const h=hoje(),m=h.slice(0,7);
-  const pend=pagarDoMes(m).concat(pagarDoMes(addMes(m,1))).filter(p=>!p.pago);
-  const recs=receberDoMes(m).filter(p=>!p.recebido);const recHoje=recs.filter(p=>p.prev===h);
+  const pend=pagarPrinc(m).concat(pagarPrinc(addMes(m,1))).filter(p=>!p.pago);
+  const recs=receberPrinc(m).filter(p=>!p.recebido);const recHoje=recs.filter(p=>p.prev===h);
   const venc=pend.filter(p=>p.venc<h),sem=pend.filter(p=>p.venc>=h&&p.venc<=addDias(h,7));
   if(venc.length)return`⚠️ ${venc.length===1?'1 conta vencida':venc.length+' contas vencidas'} sem pagamento`;
   if(recHoje.length)return`💰 ${recHoje.length===1?'1 entrada prevista para hoje':recHoje.length+' entradas previstas para hoje'}`;
@@ -544,8 +550,8 @@ function cardDiario(){
   const dia=+h.slice(8),diasRest=ultDia(m)-dia+1;
   const doM=doMes(m),ids=idsDeContas();
   const naCx=l=>ehCx(conta(l.conta));
-  const pend=soma(pagarDoMes(m).filter(p=>!p.pago));
-  const aReceber=soma(receberDoMes(m).filter(p=>!p.recebido));
+  const pend=soma(pagarPrinc(m).filter(p=>!p.pago));
+  const aReceber=soma(receberPrinc(m).filter(p=>!p.recebido));
   const res=valorReserva(m),jaG=guardadoNoMes(m),guard=Math.max(0,jaG),falta=Math.max(0,res-guard);
   let disp,livre,expl;
   if(base==='entradas'){
@@ -624,7 +630,7 @@ function dicas(m){
   if(atual&&(r.r>0||r.d>0)){
     const ids=idsDeContas(),dia=+h.slice(8),rest=ultDia(m)-dia;
     const varia=soma(doMes(m).filter(l=>l.tipo==='despesa'&&l.data<=h&&!ids.has(l.id)));
-    const media=varia/dia,pend=soma(pagarDoMes(m).filter(p=>!p.pago));
+    const media=varia/dia,pend=soma(pagarPrinc(m).filter(p=>!p.pago));
     const prev=r.r-r.d-pend-media*rest;
     out.push(prev>=0?`📈 No ritmo atual, você deve fechar o mês com <b class="pos">${R(prev)}</b> sobrando.`
       :`⚠️ No ritmo atual, o mês deve fechar <b class="neg">${R(-prev)}</b> no vermelho. Seus gastos do dia a dia estão em ${R(media)} por dia.`);
@@ -659,17 +665,28 @@ function cardDicas(){
 function cardGrupo(){
   if(!grafExtraOn())return'';
   const g=grupoAtual();if(!g)return'';
-  const gs=grupos(),r=resumoGrupo(mes,g),qt=doMes(mes).filter(l=>l.grupo===g).length;
-  return`<div class="card"><h3>📌 ${esc(g)} <button class="btnp" id="ocultaGE">Ocultar</button></h3>
+  const gs=grupos(),r=resumoGrupo(mes,g),qt=doMesTudo(mes).filter(l=>l.grupo===g).length,sg=saldoGrupo(g,hoje()),gq=esc(g).replace(/'/g,"\\'");
+  return`<div class="card"><h3>📌 ${esc(g)} <span><button class="btnp" onclick="formSaldoGrupo('${gq}')">⚙️</button> <button class="btnp" id="ocultaGE">Ocultar</button></span></h3>
     ${gs.length>1?`<div class="chips">${gs.map(x=>`<button class="chip ${x===g?'on':''}" data-g="${esc(x)}">${esc(x)}</button>`).join('')}</div>`:''}
-    <div class="grid3">
-      <div class="mini"><small>Entradas</small><b class="pos">${R(r.r)}</b></div>
-      <div class="mini"><small>Saídas</small><b class="neg">${R(r.d)}</b></div>
-      <div class="mini"><small>Saldo</small><b class="${r.s>=0?'pos':'neg'}">${R(r.s)}</b></div>
+    <small style="color:var(--mut);font-size:12px">Saldo de ${esc(g)} hoje</small>
+    <div class="grande ${sg<0?'neg':''}" style="font-size:26px">${R(sg)}</div>
+    <div class="grid3" style="margin-top:10px">
+      <div class="mini"><small>Entradas do mês</small><b class="pos">${R(r.r)}</b></div>
+      <div class="mini"><small>Saídas do mês</small><b class="neg">${R(r.d)}</b></div>
+      <div class="mini"><small>Resultado</small><b class="${r.s>=0?'pos':'neg'}">${R(r.s)}</b></div>
     </div>
+    <div class="linha" style="margin-top:10px"><button class="btn sec" style="padding:9px" onclick="formLanc(null,{tipo:'receita',grupo:'${gq}'})">🟢 + Entrada</button><button class="btn sec" style="padding:9px" onclick="formLanc(null,{tipo:'despesa',grupo:'${gq}'})">🔴 + Saída</button></div>
     <canvas id="barrasG" height="150" style="margin-top:12px"></canvas>
     <div class="legenda"><span><i style="background:var(--verde)"></i>Entradas</span><span><i style="background:var(--verm)"></i>Saídas</span><span>· últimos 6 meses</span></div>
-    <small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">${qt} lançamento(s) neste mês. Ficam fora do gráfico principal, mas contam no saldo.</small></div>`;
+    <small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">${qt} lançamento(s) neste mês. Controle à parte: não entra no saldo, nos gráficos nem no "quanto posso gastar".</small></div>`;
+}
+function formSaldoGrupo(g){
+  const v=(D.gruposIni&&D.gruposIni[g])||0;
+  abrir(`<h2>📌 Saldo inicial de ${esc(g)}</h2>
+   <p style="color:var(--mut);font-size:13px">Quanto esse controle já tinha antes dos lançamentos no app. O saldo do grupo = saldo inicial + entradas − saídas.</p>
+   <label>Saldo inicial (R$)</label><input id="gsi" inputmode="decimal" value="${v?String(v).replace('.',','):''}" placeholder="0,00">
+   <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
+  $('#ok').onclick=()=>{const t=$('#gsi').value.trim(),n=(t.startsWith('-')?-1:1)*num(t.replace('-',''));D.gruposIni=D.gruposIni||{};if(n)D.gruposIni[g]=n;else delete D.gruposIni[g];salva();fechar();toast('✅ Saldo do grupo salvo')};
 }
 // ================== TELAS ==================
 function render(){
@@ -680,14 +697,14 @@ function render(){
   ({inicio:tInicio,lanc:tLanc,contas:tPagar,receber:tReceber,planos:tPlanos,mais:tMais})[aba]();
 }
 function tInicio(){
-  const h=hoje(),r=resumo(mes),pend=pagarDoMes(mes).filter(p=>!p.pago),gc=gastoCatGraf(mes);
+  const h=hoje(),r=resumo(mes),pend=pagarPrinc(mes).filter(p=>!p.pago),gc=gastoCatGraf(mes);
   const venc=pend.filter(p=>p.venc<h),prox=pend.filter(p=>p.venc>=h&&p.venc<=addDias(h,5));
   const cats=Object.entries(gc).sort((a,b)=>b[1]-a[1]);
   const orcAlerta=Object.entries(D.orc).filter(([c,v])=>{if(!(v>0))return false;const st=statusOrc(mes,c,v);
     const ok=D.alertaOk&&D.alertaOk[mes+'|'+c];return st.alerta&&!(ok&&ok>=Math.round(st.g*100))});
-  const totPend=soma(pend),recPend=soma(receberDoMes(mes).filter(p=>!p.recebido)),st=saldoTotal(h),temCx=D.contas.some(ehCx);
+  const totPend=soma(pend),recPend=soma(receberPrinc(mes).filter(p=>!p.recebido)),st=saldoTotal(h),temCx=D.contas.some(ehCx);
   window._diario=null;const cd=mes===h.slice(0,7)?cardDiario():'';
-  const temSep=doMes(mes).some(l=>l.grupo&&l.tipo==='despesa');
+  const temSep=doMesTudo(mes).some(l=>l.grupo);
   const cg=cardGrupo();
   $('#app').innerHTML=`
   ${linhaOla()}
@@ -712,7 +729,7 @@ function tInicio(){
   <div class="card"><h3>Minhas contas</h3>${listaContas(false)}</div>
   <div class="card"><h3>Gastos por categoria</h3>
     ${cats.length?`<canvas id="pizza" height="180"></canvas><div class="legenda" id="leg"></div>`:'<div class="vazio">Nenhuma despesa neste mês</div>'}
-    ${temSep?'<small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">📌 Sem os lançamentos separados</small>':''}
+    ${temSep?'<small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">📌 Lançamentos separados não entram aqui nem no saldo</small>':''}
   </div>
   ${cg}
   <div class="card"><h3>Últimos 6 meses</h3><canvas id="barras" height="170"></canvas>
@@ -747,7 +764,7 @@ function barras(id='barras',fn=resumoGraf){
     x.fillStyle=ms[i]===mes?(claro?'#172033':'#fff'):'#94a3b8';x.font='11px system-ui';x.textAlign='center';x.fillText(nomeMes(ms[i]),gx,h-5)});
 }
 function tLanc(){
-  let ls=doMes(mes);if(filtro!=='todos')ls=ls.filter(l=>l.tipo===filtro);
+  let ls=doMesTudo(mes);if(filtro!=='todos')ls=ls.filter(l=>l.tipo===filtro);
   ls.sort((a,b)=>b.data.localeCompare(a.data)||b.id.localeCompare(a.id));
   let dia='',html='';
   ls.forEach(l=>{if(l.data!==dia){dia=l.data;html+=`<div style="color:var(--mut);font-size:12px;margin:10px 0 2px">${new Date(dia+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'})}</div>`}
@@ -760,13 +777,13 @@ function tLanc(){
   ligaRapido();
 }
 function tPagar(){
-  const pm=pagarDoMes(mes),tot=soma(pm),pg=soma(pm.filter(p=>p.pago));
+  const pm=pagarDoMes(mes),pp=pm.filter(p=>!p.grupo),tot=soma(pp),pg=soma(pp.filter(p=>p.pago));
   $('#app').innerHTML=`<div class="card"><h3>Contas do mês</h3>
     <div class="grid2"><div class="mini"><small>Total</small><b>${R(tot)}</b></div><div class="mini"><small>Falta pagar</small><b class="amar">${R(tot-pg)}</b></div></div>
     <div class="barra"><i style="width:${tot?pg/tot*100:0}%;background:var(--verde)"></i></div></div>
   <div class="card">${pm.map(p=>{const atras=!p.pago&&p.venc<hoje();
     return`<div class="item"><div class="ic">${icCat('despesa',p.cat)}</div>
-    <div class="info" onclick="formPagar('${p.id}')"><b>${esc(p.desc)}</b><small class="${atras?'neg':''}">${p.pago?'✅ Paga':atras?'⚠️ Venceu '+dataBR(p.venc):'Vence '+dataBR(p.venc)}${p.rec?' · 🔁 mensal':''}</small></div>
+    <div class="info" onclick="formPagar('${p.id}')"><b>${esc(p.desc)}</b><small class="${atras?'neg':''}">${p.pago?'✅ Paga':atras?'⚠️ Venceu '+dataBR(p.venc):'Vence '+dataBR(p.venc)}${p.rec?' · 🔁 mensal':''}${p.grupo?` <span class="tag">📌 ${esc(p.grupo)}</span>`:''}</small></div>
     <div style="text-align:right"><div class="val">${R(p.valor)}</div>
     <button class="btnp ${p.pago?'ok':''}" style="margin-top:4px" onclick="pagar('${p.id}')">${p.pago?'Desfazer':'Pagar'}</button></div></div>`}).join('')||'<div class="vazio">Nenhuma conta a pagar neste mês.<br>Toque no + para cadastrar (aluguel, luz, internet…)</div>'}</div>`;
 }
@@ -778,18 +795,18 @@ function pagar(id){
     <label>Data do pagamento</label><input id="pd" type="date" value="${hoje().slice(0,7)===mes?hoje():inst.venc}">
     <label>Pagou com</label><select id="pc">${optsConta()}</select>
     <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Confirmar</button></div>`);
-  $('#ok').onclick=()=>{const l={id:uid(),tipo:'despesa',valor:num($('#pv').value),desc:p.desc,cat:p.cat,conta:$('#pc').value,data:$('#pd').value||hoje()};
+  $('#ok').onclick=()=>{const l={id:uid(),tipo:'despesa',valor:num($('#pv').value),desc:p.desc,cat:p.cat,conta:$('#pc').value,data:$('#pd').value||hoje()};if(p.grupo)l.grupo=p.grupo;
     D.lancs.push(l);p.pagos[mes]=l.id;salva();fechar();toast('✅ Conta paga!')};
 }
 function tReceber(){
-  const pm=receberDoMes(mes),tot=soma(pm),rc=soma(pm.filter(p=>p.recebido));
+  const pm=receberDoMes(mes),pp=pm.filter(p=>!p.grupo),tot=soma(pp),rc=soma(pp.filter(p=>p.recebido));
   $('#app').innerHTML=`<div class="card"><h3>Entradas previstas do mês</h3>
     <div class="grid2"><div class="mini"><small>Total previsto</small><b>${R(tot)}</b></div><div class="mini"><small>A receber</small><b class="pos">${R(tot-rc)}</b></div></div>
     <div class="barra"><i style="width:${tot?rc/tot*100:0}%;background:var(--verde)"></i></div></div>
   <div class="card">${pm.map(p=>{
     const atras=!p.recebido&&p.prev<hoje();
     return`<div class="item"><div class="ic">${icCat('receita',p.cat)}</div>
-    <div class="info" onclick="formReceber('${p.id}')"><b>${esc(p.desc)}</b><small class="${atras?'neg':''}">${p.recebido?'✅ Recebido':atras?'⚠️ Previsto para '+dataBR(p.prev):'Previsto '+dataBR(p.prev)}${p.rec?' · 🔁 mensal':''}</small></div>
+    <div class="info" onclick="formReceber('${p.id}')"><b>${esc(p.desc)}</b><small class="${atras?'neg':''}">${p.recebido?'✅ Recebido':atras?'⚠️ Previsto para '+dataBR(p.prev):'Previsto '+dataBR(p.prev)}${p.rec?' · 🔁 mensal':''}${p.grupo?` <span class="tag">📌 ${esc(p.grupo)}</span>`:''}</small></div>
     <div style="text-align:right"><div class="val pos">${R(p.valor)}</div>
     <button class="btnp ${p.recebido?'ok':''}" style="margin-top:4px" onclick="receberEntrada('${p.id}')">${p.recebido?'Desfazer':'Receber'}</button></div></div>`}).join('')||'<div class="vazio">Nenhuma entrada prevista neste mês.<br>Toque no + para cadastrar salário, hora extra, freela…</div>'}</div>`;
 }
@@ -801,7 +818,7 @@ function receberEntrada(id){
     <label>Data real do recebimento</label><input id="rd" type="date" value="${hoje().slice(0,7)===mes?hoje():inst.prev}">
     <label>Entrou em</label><select id="rc">${optsConta()}</select>
     <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Confirmar</button></div>`);
-  $('#ok').onclick=()=>{const l={id:uid(),tipo:'receita',valor:num($('#rv').value),desc:p.desc,cat:p.cat,conta:$('#rc').value,data:$('#rd').value||hoje()};
+  $('#ok').onclick=()=>{const l={id:uid(),tipo:'receita',valor:num($('#rv').value),desc:p.desc,cat:p.cat,conta:$('#rc').value,data:$('#rd').value||hoje()};if(p.grupo)l.grupo=p.grupo;
     D.lancs.push(l);p.recebidos[mes]=l.id;salva();fechar();toast('💰 Recebimento lançado!')};
 }
 function formReceber(id){
@@ -813,13 +830,15 @@ function formReceber(id){
    <div class="check"><input type="checkbox" id="rrec" ${p.rec?'checked':''}><span>🔁 Entrada fixa (todo mês)</span></div>
    <div id="rRec"><label>Dia previsto</label><input id="rdia" type="number" min="1" max="31" value="${p.dia||5}"></div>
    <div id="rUni"><label>Data prevista</label><input id="rdt" type="date" value="${p.data||hoje()}"></div>
+   ${htmlSep(p.grupo)}
    <div class="linha">${id?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
-  const muda=()=>{$('#rRec').classList.toggle('oculto',!$('#rrec').checked);$('#rUni').classList.toggle('oculto',$('#rrec').checked)};$('#rrec').onchange=muda;muda();
+  const muda=()=>{$('#rRec').classList.toggle('oculto',!$('#rrec').checked);$('#rUni').classList.toggle('oculto',$('#rrec').checked)};$('#rrec').onchange=muda;muda();ligaSep();
   if(!id)$('#rdsc').oninput=()=>{const sc=sugereCat($('#rdsc').value,'receita');if(sc)$('#rcat').value=sc};
   if(id)$('#del').onclick=()=>{if(!confirm('Excluir esta entrada prevista?'))return;
     if(p.rec&&confirm('Parar a previsão a partir deste mês? (OK = mantém o histórico anterior)'))p.fim=addMes(mes,-1);else D.receber=D.receber.filter(x=>x.id!==id);salva();fechar()};
   $('#ok').onclick=()=>{const v=num($('#rval').value),d=$('#rdsc').value.trim();if(!d||v<=0)return alert('Preencha descrição e valor');
-    const o={desc:d,valor:v,cat:$('#rcat').value,rec:$('#rrec').checked,dia:Math.max(1,Math.min(31,+$('#rdia').value||1)),data:$('#rdt').value||hoje()};
+    const g=lerSep();if(g===false)return alert('Dê um nome ao grupo');
+    const o={grupo:g||undefined,desc:d,valor:v,cat:$('#rcat').value,rec:$('#rrec').checked,dia:Math.max(1,Math.min(31,+$('#rdia').value||1)),data:$('#rdt').value||hoje()};
     if(id)Object.assign(p,o);else D.receber.push({...o,id:uid(),inicio:mes,recebidos:{}});salva();fechar();toast('💰 Entrada prevista salva')};
 }
 function tPlanos(){
@@ -876,7 +895,8 @@ function tMais(){
   </div>
   <div class="card"><h3>📌 Gráfico separado</h3>
     <div class="check" style="margin-top:0"><input type="checkbox" id="optGE" ${grafExtraOn()?'checked':''}><span>Mostrar na tela inicial</span></div>
-    <p style="color:var(--mut);font-size:12px;margin-top:8px">${gs.length?'Grupos criados: <b>'+gs.map(esc).join(', ')+'</b>.':'Nenhum grupo ainda. Ao lançar, marque “📌 Separar do gráfico principal” e dê um nome.'} Esses lançamentos ficam fora dos gráficos principais, mas continuam contando no saldo.</p>
+    <p style="color:var(--mut);font-size:12px;margin-top:8px">${gs.length?'':'Nenhum grupo ainda. Ao lançar, marque “📌 Separar do saldo e do gráfico principal” e dê um nome.'} Esses lançamentos têm saldo e gráfico próprios e não afetam o saldo das contas.</p>
+    ${gs.map(g=>`<div class="item" onclick="formSaldoGrupo('${esc(g).replace(/'/g,"\\'")}')"><div class="ic">📌</div><div class="info"><b>${esc(g)}</b><small>Toque para ajustar o saldo inicial</small></div><div class="val ${saldoGrupo(g,h)<0?'neg':''}">${R(saldoGrupo(g,h))}</div></div>`).join('')}
   </div>
   <div class="card"><h3>👤 Seu nome</h3><div class="item" onclick="formNome()" style="padding:0"><div class="info"><b>${D.nome?esc(D.nome):'Não definido'}</b><small>Usado na saudação da tela inicial</small></div><button class="btnp">✏️ Alterar</button></div></div>
   <div class="card"><h3>🔒 Bloqueio por PIN</h3>
@@ -915,9 +935,9 @@ const optsConta=sel=>principais().map(c=>[c,...caixinhas(c.id)]).flat().map(c=>`
 const optsCat=(t,sel)=>categorias(t).map(c=>`<option value="${esc(c)}" ${c===sel?'selected':''}>${icCat(t,c)} ${esc(c)}</option>`).join('');
 function formLanc(id,pre){
   pre=pre||{};
-  const l=id?D.lancs.find(x=>x.id===id):{tipo:pre.tipo||'despesa',valor:pre.valor||'',desc:pre.desc||'',cat:pre.cat||'',conta:pre.conta||principais()[0]?.id,data:pre.data||(mes===hoje().slice(0,7)?hoje():mes+'-01')};
+  const l=id?D.lancs.find(x=>x.id===id):{tipo:pre.tipo||'despesa',valor:pre.valor||'',desc:pre.desc||'',cat:pre.cat||'',conta:pre.conta||principais()[0]?.id,data:pre.data||(mes===hoje().slice(0,7)?hoje():mes+'-01'),grupo:pre.grupo||undefined};
   if(!l)return;
-  let tipo=l.tipo,catManual=!!id||!!pre.cat,sepManual=!!id;
+  let tipo=l.tipo,catManual=!!id||!!pre.cat,sepManual=!!id||!!pre.grupo;
   abrir(`<h2>${id?'Editar':l.tipo==='receita'&&!pre.desc?'Nova receita':l.tipo==='despesa'&&!pre.desc&&!pre.valor&&pre.tipo?'Nova despesa':'Novo lançamento'}</h2>
    <div class="tipos">${[['despesa','🔴 Despesa'],['receita','🟢 Receita'],['transf','🔁 Transferir']].map(([k,n])=>`<button data-k="${k}">${n}</button>`).join('')}</div>
    <label>Valor (R$)</label><input id="fv" inputmode="decimal" placeholder="0,00" value="${l.valor?String(l.valor).replace('.',','):''}">
@@ -927,8 +947,8 @@ function formLanc(id,pre){
    <div id="bDest"><label>Para a conta</label><select id="fdst">${optsConta(l.dest||principais()[1]?.id)}</select></div>
    <label>Data</label><input id="fdt" type="date" value="${l.data}">
    <div id="bSep" class="caixaSep">
-     <div class="check"><input type="checkbox" id="fsep" ${l.grupo?'checked':''}><span>📌 Separar do gráfico principal</span></div>
-     <div id="bSepN" class="oculto"><label>Nome do grupo (ganha um gráfico só dele)</label>
+     <div class="check"><input type="checkbox" id="fsep" ${l.grupo?'checked':''}><span>📌 Separar do saldo e do gráfico principal</span></div>
+     <div id="bSepN" class="oculto"><label>Nome do grupo (ganha saldo e gráfico só dele)</label>
        <input id="fgrp" list="lGrp" placeholder="Ex.: Gasolina, Corridas, Larissa" value="${esc(l.grupo||'')}" maxlength="30" autocomplete="off">
        <datalist id="lGrp">${grupos().map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
        ${grupos().length?`<div class="chips" style="margin:8px 0 0">${grupos().map(g=>`<button type="button" class="chip" data-sg="${esc(g)}">${esc(g)}</button>`).join('')}</div>`:''}
@@ -987,6 +1007,10 @@ function formLanc(id,pre){
     if(grpFinal)D.grupoSel=grpFinal;
     salva();fechar();toast(grpFinal?'✅ Salvo · 📌 '+grpFinal:'✅ Salvo')};
 }
+const htmlSep=g=>`<div class="caixaSep"><div class="check"><input type="checkbox" id="xsep" ${g?'checked':''}><span>📌 Separar do saldo e do gráfico principal</span></div>
+  <div id="xsepN" class="${g?'':'oculto'}"><label>Nome do grupo</label><input id="xgrp" list="lGrpX" value="${esc(g||'')}" placeholder="Ex.: Gasolina" maxlength="30" autocomplete="off"><datalist id="lGrpX">${grupos().map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div></div>`;
+function ligaSep(){$('#xsep').onchange=()=>{$('#xsepN').classList.toggle('oculto',!$('#xsep').checked);if($('#xsep').checked&&!$('#xgrp').value)$('#xgrp').value=grupoAtual()||''}}
+function lerSep(){if(!$('#xsep').checked)return null;const g=$('#xgrp').value.trim().replace(/\s+/g,' ');if(!g)return false;return grupos().find(x=>semAcento(x)===semAcento(g))||g}
 function formPagar(id){
   const p=id?D.pagar.find(x=>x.id===id):{desc:'',valor:'',cat:'Contas/Serviços',rec:true,dia:10,data:hoje(),inicio:mes};
   abrir(`<h2>${id?'Editar':'Nova'} conta a pagar</h2>
@@ -996,13 +1020,15 @@ function formPagar(id){
    <div class="check"><input type="checkbox" id="pr" ${p.rec?'checked':''}><span>🔁 Conta fixa (todo mês)</span></div>
    <div id="bRec"><label>Dia do vencimento</label><input id="pdia" type="number" min="1" max="31" value="${p.dia||10}"></div>
    <div id="bUni"><label>Data do vencimento</label><input id="pdt" type="date" value="${p.data||hoje()}"></div>
+   ${htmlSep(p.grupo)}
    <div class="linha">${id?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
-  const t=()=>{$('#bRec').classList.toggle('oculto',!$('#pr').checked);$('#bUni').classList.toggle('oculto',$('#pr').checked)};$('#pr').onchange=t;t();
+  const t=()=>{$('#bRec').classList.toggle('oculto',!$('#pr').checked);$('#bUni').classList.toggle('oculto',$('#pr').checked)};$('#pr').onchange=t;t();ligaSep();
   if(!id)$('#pd').oninput=()=>{const s=sugereCat($('#pd').value,'despesa');if(s)$('#pc').value=s};
   if(id)$('#del').onclick=()=>{if(!confirm('Excluir esta conta?'))return;
     if(p.rec&&confirm('Parar de cobrar a partir deste mês? (OK = mantém o histórico dos meses anteriores)'))p.fim=addMes(mes,-1);else D.pagar=D.pagar.filter(x=>x.id!==id);salva();fechar()};
   $('#ok').onclick=()=>{const v=num($('#pv').value),d=$('#pd').value.trim();if(!d||v<=0)return alert('Preencha descrição e valor');
-    const o={desc:d,valor:v,cat:$('#pc').value,rec:$('#pr').checked,dia:Math.max(1,Math.min(31,+$('#pdia').value||1)),data:$('#pdt').value||hoje()};
+    const g=lerSep();if(g===false)return alert('Dê um nome ao grupo');
+    const o={grupo:g||undefined,desc:d,valor:v,cat:$('#pc').value,rec:$('#pr').checked,dia:Math.max(1,Math.min(31,+$('#pdia').value||1)),data:$('#pdt').value||hoje()};
     if(id)Object.assign(p,o);else D.pagar.push({...o,id:uid(),inicio:mes,pagos:{}});salva();fechar();toast('✅ Salvo')};
 }
 function formMeta(id){
