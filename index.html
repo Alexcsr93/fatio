@@ -94,6 +94,15 @@ canvas{max-width:100%}
 .toast.acao button{background:none;border:none;color:#60a5fa;font-weight:700;font-size:14px;white-space:nowrap;padding:4px 0}
 .alerta{background:var(--alertbg);border:1px solid var(--alertbd);color:var(--alerttxt);border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:12px}
 .oculto{display:none!important}
+.selbox{width:22px;height:22px;border-radius:7px;border:2px solid var(--mut);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff}
+.item.sel{background:#1e3a8a33;border-radius:10px}
+.item.sel .selbox{background:var(--azul);border-color:var(--azul)}
+.barSel{position:fixed;left:0;right:0;bottom:78px;z-index:7;display:flex;justify-content:center;padding:0 10px}
+.barSel>div{background:var(--card);border:1px solid var(--borda);border-radius:16px;box-shadow:0 6px 24px var(--shadow);padding:10px;width:100%;max-width:620px}
+.barSel .acoes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.barSel .acoes button{background:var(--card2);border:none;color:var(--txt);border-radius:10px;padding:8px 2px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px}
+.barSel .acoes button span{font-size:18px}
+.barSel .acoes button.perigo{background:#7f1d1d;color:#fecaca}
 /* lançamento rápido */
 .rapido{display:flex;gap:6px;margin-bottom:6px}
 .rapido input{flex:1;min-width:0}
@@ -177,7 +186,7 @@ canvas{max-width:100%}
 </div>
 <script>
 // ================== DADOS ==================
-const VERSAO='1.5.0';
+const VERSAO='1.6.0';
 const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
@@ -693,7 +702,7 @@ function render(){
   guardaTela();
   $('#mTxt').textContent=nomeMes(mes);
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===aba));
-  $('#fab').classList.toggle('oculto',aba==='mais');
+  $('#fab').classList.toggle('oculto',aba==='mais'||(aba==='lanc'&&!!selLanc));
   ({inicio:tInicio,lanc:tLanc,contas:tPagar,receber:tReceber,planos:tPlanos,mais:tMais})[aba]();
 }
 function tInicio(){
@@ -763,18 +772,81 @@ function barras(id='barras',fn=resumoGraf){
     x.fillStyle='#ef4444';const hd=r.d/max*(base-10);x.fillRect(gx+1,base-hd,bw,hd);
     x.fillStyle=ms[i]===mes?(claro?'#172033':'#fff'):'#94a3b8';x.font='11px system-ui';x.textAlign='center';x.fillText(nomeMes(ms[i]),gx,h-5)});
 }
+let selLanc=null; // null = modo normal; Set = modo seleção
+const ocultaSepLanc=()=>!!D.ocultaSepLanc;
 function tLanc(){
   let ls=doMesTudo(mes);if(filtro!=='todos')ls=ls.filter(l=>l.tipo===filtro);
+  const nOcultos=ocultaSepLanc()?ls.filter(l=>l.grupo).length:0;
+  if(ocultaSepLanc())ls=ls.filter(l=>!l.grupo);
   ls.sort((a,b)=>b.data.localeCompare(a.data)||b.id.localeCompare(a.id));
+  if(selLanc){const vis=new Set(ls.map(l=>l.id));[...selLanc].forEach(i=>{if(!vis.has(i))selLanc.delete(i)})}
   let dia='',html='';
   ls.forEach(l=>{if(l.data!==dia){dia=l.data;html+=`<div style="color:var(--mut);font-size:12px;margin:10px 0 2px">${new Date(dia+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'})}</div>`}
-    const t=l.tipo==='transf';
-    html+=`<div class="item" onclick="formLanc('${l.id}')"><div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
+    const t=l.tipo==='transf',on=selLanc&&selLanc.has(l.id);
+    html+=`<div class="item ${on?'sel':''}" data-id="${l.id}">${selLanc?`<div class="selbox">${on?'✓':''}</div>`:''}<div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
       <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>`:''}</small></div>
       <div class="val ${l.tipo==='receita'?'pos':l.tipo==='despesa'?'neg':''}">${l.tipo==='despesa'?'-':l.tipo==='receita'?'+':''}${R(l.valor)}</div></div>`});
-  $('#app').innerHTML=`${barraRapida()}<div class="chips">${[['todos','Todos'],['despesa','Despesas'],['receita','Receitas'],['transf','Transferências']].map(([k,n])=>`<button class="chip ${filtro===k?'on':''}" onclick="filtro='${k}';render()">${n}</button>`).join('')}</div>
-   <div class="card">${html||'<div class="vazio">Nenhum lançamento neste mês.<br>Toque no + ou use o campo acima.</div>'}</div>`;
-  ligaRapido();
+  const avisoOc=nOcultos?`<div class="vazio" style="padding:10px 0 2px;font-size:12px">🙈 ${nOcultos} lançamento(s) 📌 oculto(s) · <a onclick="D.ocultaSepLanc=false;salva();render()" style="color:var(--azul);cursor:pointer">mostrar</a></div>`:'';
+  const topo=selLanc
+    ?`<div class="chips" style="align-items:center"><button class="chip on" onclick="selLanc=null;render()">✕ Cancelar</button><button class="chip" id="selTudo">${ls.length&&selLanc.size===ls.length?'Desmarcar todos':'Selecionar todos'}</button></div>`
+    :`${barraRapida()}<div class="chips">${[['todos','Todos'],['despesa','Despesas'],['receita','Receitas'],['transf','Transferências']].map(([k,n])=>`<button class="chip ${filtro===k?'on':''}" onclick="filtro='${k}';render()">${n}</button>`).join('')}${ls.length?'<button class="chip" onclick="selLanc=new Set();render()">☑️ Selecionar</button>':''}</div>`;
+  $('#app').innerHTML=`${topo}
+   <div class="card" ${selLanc?'style="margin-bottom:150px"':''}>${html||(nOcultos?'':'<div class="vazio">Nenhum lançamento neste mês.<br>Toque no + ou use o campo acima.</div>')}${avisoOc}</div>
+   ${selLanc?barraSelecao(ls):''}`;
+  $('#fab').classList.toggle('oculto',!!selLanc);
+  document.querySelectorAll('#app .item[data-id]').forEach(e=>{
+    const id=e.dataset.id;let tm=null,longo=false;
+    e.onclick=()=>{if(longo){longo=false;return}if(selLanc){selLanc.has(id)?selLanc.delete(id):selLanc.add(id);render()}else formLanc(id)};
+    // segurar o dedo entra no modo seleção
+    e.ontouchstart=()=>{longo=false;if(selLanc)return;tm=setTimeout(()=>{longo=true;navigator.vibrate&&navigator.vibrate(30);selLanc=new Set([id]);render()},500)};
+    e.ontouchend=e.ontouchmove=()=>clearTimeout(tm);
+  });
+  if(selLanc){
+    $('#selTudo').onclick=()=>{if(selLanc.size===ls.length)selLanc.clear();else ls.forEach(l=>selLanc.add(l.id));render()};
+    ligaBarraSel();
+  }else ligaRapido();
+}
+function barraSelecao(ls){
+  const sl=ls.filter(l=>selLanc.has(l.id)),r=soma(sl.filter(l=>l.tipo==='receita')),d=soma(sl.filter(l=>l.tipo==='despesa'));
+  return`<div class="barSel"><div>
+    <div style="display:flex;justify-content:space-between;font-size:13px"><b>${sl.length} selecionado(s)</b><span>${r?`<span class="pos">+${R(r)}</span> `:''}${d?`<span class="neg">-${R(d)}</span>`:''}</span></div>
+    <div class="acoes">
+      <button id="sGrp"><span>📌</span>Separar</button>
+      <button id="sTira"><span>↩️</span>Tirar do 📌</button>
+      <button id="sCat"><span>🏷️</span>Categoria</button>
+      <button id="sDel" class="perigo"><span>🗑️</span>Excluir</button>
+    </div></div></div>`;
+}
+const selecionados=()=>D.lancs.filter(l=>selLanc&&selLanc.has(l.id));
+function ligaBarraSel(){
+  const precisa=()=>{if(!selLanc.size){toast('Selecione pelo menos 1 lançamento');return false}return true};
+  $('#sDel').onclick=()=>{if(!precisa())return;const n=selLanc.size;
+    if(!confirm(`Excluir ${n} lançamento(s)? Isso não pode ser desfeito.`))return;
+    const ids=new Set(selLanc);D.lancs=D.lancs.filter(l=>!ids.has(l.id));
+    D.pagar.forEach(p=>{for(const k in p.pagos||{})if(ids.has(p.pagos[k]))delete p.pagos[k]});
+    D.receber.forEach(p=>{for(const k in p.recebidos||{})if(ids.has(p.recebidos[k]))delete p.recebidos[k]});
+    selLanc=null;salva();render();toast(`🗑️ ${n} lançamento(s) excluído(s)`)};
+  $('#sTira').onclick=()=>{if(!precisa())return;let n=0;selecionados().forEach(l=>{if(l.grupo){delete l.grupo;n++}});
+    selLanc=null;salva();render();toast(n?`↩️ ${n} voltaram para o saldo principal`:'Nenhum selecionado estava separado')};
+  $('#sGrp').onclick=()=>{if(!precisa())return;
+    const sl=selecionados().filter(l=>l.tipo!=='transf');if(!sl.length)return toast('Transferências não podem ser separadas');
+    abrir(`<h2>📌 Separar ${sl.length} lançamento(s)</h2>
+     <p style="color:var(--mut);font-size:13px">Saem do saldo e do gráfico principal e vão para o saldo do grupo.${sl.length<selLanc.size?' Transferências selecionadas serão ignoradas.':''}</p>
+     <label>Nome do grupo</label><input id="sgN" list="lGrpS" value="${esc(grupoAtual()||'')}" placeholder="Ex.: Gasolina" maxlength="30" autocomplete="off">
+     <datalist id="lGrpS">${grupos().map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+     ${grupos().length?`<div class="chips" style="margin:8px 0 0">${grupos().map(g=>`<button type="button" class="chip" data-sg="${esc(g)}">${esc(g)}</button>`).join('')}</div>`:''}
+     <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Separar</button></div>`);
+    document.querySelectorAll('[data-sg]').forEach(b=>b.onclick=()=>$('#sgN').value=b.dataset.sg);
+    $('#ok').onclick=()=>{let g=$('#sgN').value.trim().replace(/\s+/g,' ');if(!g)return alert('Dê um nome ao grupo');
+      g=grupos().find(x=>semAcento(x)===semAcento(g))||g;sl.forEach(l=>l.grupo=g);D.grupoSel=g;selLanc=null;salva();fechar();toast(`📌 ${sl.length} lançamento(s) em ${g}`)}};
+  $('#sCat').onclick=()=>{if(!precisa())return;
+    const sl=selecionados().filter(l=>l.tipo!=='transf'),tipos=[...new Set(sl.map(l=>l.tipo))];
+    if(!sl.length)return toast('Transferências não têm categoria');
+    if(tipos.length>1)return toast('Selecione só despesas ou só receitas para trocar a categoria');
+    abrir(`<h2>🏷️ Categoria de ${sl.length} lançamento(s)</h2>
+     <label>Nova categoria</label><select id="sc">${optsCat(tipos[0],sl[0].cat)}</select>
+     <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Aplicar</button></div>`);
+    $('#ok').onclick=()=>{const c=$('#sc').value;sl.forEach(l=>l.cat=c);selLanc=null;salva();fechar();toast(`🏷️ Categoria alterada para ${c}`)}};
 }
 function tPagar(){
   const pm=pagarDoMes(mes),pp=pm.filter(p=>!p.grupo),tot=soma(pp),pg=soma(pp.filter(p=>p.pago));
@@ -895,6 +967,7 @@ function tMais(){
   </div>
   <div class="card"><h3>📌 Gráfico separado</h3>
     <div class="check" style="margin-top:0"><input type="checkbox" id="optGE" ${grafExtraOn()?'checked':''}><span>Mostrar na tela inicial</span></div>
+    <div class="check"><input type="checkbox" id="optOL" ${ocultaSepLanc()?'checked':''}><span>Ocultar transações 📌 na lista de Lançamentos</span></div>
     <p style="color:var(--mut);font-size:12px;margin-top:8px">${gs.length?'':'Nenhum grupo ainda. Ao lançar, marque “📌 Separar do saldo e do gráfico principal” e dê um nome.'} Esses lançamentos têm saldo e gráfico próprios e não afetam o saldo das contas.</p>
     ${gs.map(g=>`<div class="item" onclick="formSaldoGrupo('${esc(g).replace(/'/g,"\\'")}')"><div class="ic">📌</div><div class="info"><b>${esc(g)}</b><small>Toque para ajustar o saldo inicial</small></div><div class="val ${saldoGrupo(g,h)<0?'neg':''}">${R(saldoGrupo(g,h))}</div></div>`).join('')}
   </div>
@@ -919,6 +992,7 @@ function tMais(){
   <div class="card"><h3>Zona de perigo</h3><button class="btn perigo" onclick="zerar()">🗑️ Apagar todos os lançamentos e dados</button></div>
   <p class="vazio">${D.lancs.length} lançamentos · ${D.pagar.length} contas a pagar · ${D.receber.length} entradas previstas<br>Fatiô v${VERSAO} · <a href="privacidade.html">Política de privacidade</a></p>`;
   document.querySelectorAll('#temaBtns button').forEach(b=>{b.classList.toggle('on',b.dataset.tema===temaPref());b.onclick=()=>{D.tema=b.dataset.tema;salva();aplicaTema();render()}});
+  $('#optOL').onchange=e=>{D.ocultaSepLanc=e.target.checked;salva();toast(e.target.checked?'🙈 Transações 📌 ocultas do extrato':'👁️ Transações 📌 visíveis no extrato')};
   $('#optGE').onchange=e=>{D.grafExtra=e.target.checked;salva();toast(e.target.checked?'📌 Gráfico separado visível na tela inicial':'Gráfico separado oculto')};
 }
 function baixar(nome,txt,tipo){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:tipo}));a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
@@ -1238,9 +1312,9 @@ document.addEventListener('visibilitychange',()=>{
   if(temPin()&&saiuEm&&Date.now()-saiuEm>60000&&$('#trava').classList.contains('oculto'))travar();
 });
 // ================== EVENTOS ==================
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{aba=b.dataset.t;scrollTo(0,0);render()});
-$('#mAnt').onclick=()=>{mes=addMes(mes,-1);render()};
-$('#mProx').onclick=()=>{mes=addMes(mes,1);render()};
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{aba=b.dataset.t;selLanc=null;scrollTo(0,0);render()});
+$('#mAnt').onclick=()=>{selLanc=null;mes=addMes(mes,-1);render()};
+$('#mProx').onclick=()=>{selLanc=null;mes=addMes(mes,1);render()};
 $('#fab').onclick=()=>{if(aba==='contas')formPagar();else if(aba==='receber')formReceber();else if(aba==='planos')formMeta();else formLanc()};
 addEventListener('resize',()=>{if(aba==='inicio'&&!$('#modal').innerHTML&&document.activeElement?.id!=='rapTxt')render()});
 montaTeclado();
