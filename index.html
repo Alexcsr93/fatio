@@ -57,7 +57,8 @@ main{padding:14px 14px 0;max-width:640px;margin:0 auto}
 .barra i{display:block;height:100%;border-radius:6px}
 nav{position:fixed;bottom:14px;left:0;right:0;background:var(--nav);border-top:1px solid var(--borda);display:flex;justify-content:space-around;padding:6px 0;z-index:6;box-shadow:0 -2px 12px var(--shadow)}
 nav button{background:none;border:none;color:var(--mut);font-size:10px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px}
-nav button span{font-size:21px}
+nav button svg{width:23px;height:23px;margin-bottom:1px}
+nav button.on svg{stroke-width:2.2}
 nav button.on{color:var(--azul)}
 .fab{position:fixed;right:18px;bottom:100px;width:58px;height:58px;border-radius:50%;background:var(--azul);color:#fff;border:none;font-size:30px;box-shadow:0 6px 20px #3b82f688;z-index:6}
 .btn{background:var(--azul);color:#fff;border:none;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:700;width:100%}
@@ -154,12 +155,12 @@ canvas{max-width:100%}
 <main id="app"></main>
 <button class="fab" id="fab">+</button>
 <nav>
-  <button data-t="inicio" class="on"><span>🏠</span>Início</button>
-  <button data-t="lanc"><span>📋</span>Lançamentos</button>
-  <button data-t="contas"><span>🧾</span>A pagar</button>
-  <button data-t="receber"><span>💰</span>A receber</button>
-  <button data-t="planos"><span>🎯</span>Metas</button>
-  <button data-t="mais"><span>⚙️</span>Mais</button>
+  <button data-t="inicio" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>Início</button>
+  <button data-t="lanc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Lançamentos</button>
+  <button data-t="contas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>A pagar</button>
+  <button data-t="receber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M8.5 13.5 12 17l3.5-3.5"/></svg>A receber</button>
+  <button data-t="planos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>Metas</button>
+  <button data-t="mais"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Mais</button>
 </nav>
 <div id="modal"></div>
 <div id="login" class="oculto">
@@ -189,7 +190,7 @@ canvas{max-width:100%}
 </div>
 <script>
 // ================== DADOS ==================
-const VERSAO='1.7.0';
+const VERSAO='1.8.0';
 const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
@@ -209,7 +210,8 @@ function addCategoria(tipo,nome,icone){nome=String(nome||'').trim().replace(/\s+
 function renCategoria(tipo,antigo,novo,icone){novo=String(novo||'').trim().replace(/\s+/g,' ');if(!novo)return false;const base=Object.prototype.hasOwnProperty.call(CATS[tipo]||{},antigo);if(base&&novo!==antigo)return false;D.cats=D.cats||{despesa:[],receita:[]};if(!base&&novo!==antigo){D.cats[tipo]=D.cats[tipo].filter(x=>x!==antigo);if(!categorias(tipo).includes(novo))D.cats[tipo].push(novo);D.lancs.forEach(l=>{if(l.tipo===tipo&&l.cat===antigo)l.cat=novo});if(tipo==='despesa'){D.pagar.forEach(x=>{if(x.cat===antigo)x.cat=novo});if(D.orc[antigo]!=null){D.orc[novo]=D.orc[antigo];delete D.orc[antigo]}}else D.receber.forEach(x=>{if(x.cat===antigo)x.cat=novo})}const m=iconesCat();if(icone)m[tipo+'|'+novo]=icone;if(novo!==antigo){delete m[tipo+'|'+antigo]}localStorage.setItem(CAT_IC_KEY,JSON.stringify(m));return true}
 function delCategoria(tipo,c){if(Object.prototype.hasOwnProperty.call(CATS[tipo]||{},c))return false;if(D.lancs.some(l=>l.tipo===tipo&&l.cat===c))return false;if(tipo==='despesa'&&D.pagar.some(x=>x.cat===c))return false;if(tipo==='receita'&&D.receber.some(x=>x.cat===c))return false;D.cats[tipo]=D.cats[tipo].filter(x=>x!==c);delete D.orc[c];const m=iconesCat();delete m[tipo+'|'+c];localStorage.setItem(CAT_IC_KEY,JSON.stringify(m));return true}
 norm();
-function salva(){D.atualizado=Date.now();localStorage.setItem(CHAVE,JSON.stringify(D));if(window.nuvemSalvar)nuvemSalvar()}
+let tAgenda=null;
+function salva(){D.atualizado=Date.now();localStorage.setItem(CHAVE,JSON.stringify(D));if(window.nuvemSalvar)nuvemSalvar();clearTimeout(tAgenda);tAgenda=setTimeout(()=>window.agendaLembretes&&agendaLembretes(),1500)}
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 // ---- integração com a nuvem ----
 let remotoPendente=null;
@@ -264,7 +266,7 @@ function saldoConta(id,ate){
     if(l.tipo==='transf'){if(l.conta===id)s-=l.valor;if(l.dest===id)s+=l.valor}});
   return Math.round(s*100)/100;
 }
-const saldoTotal=ate=>D.contas.reduce((a,c)=>a+saldoConta(c.id,ate),0);
+const saldoTotal=ate=>D.contas.filter(c=>!ehCartao(c)).reduce((a,c)=>a+saldoConta(c.id,ate),0);
 // ---- Ícones modernos das contas (SVG, traço) ----
 const SVG=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const OLHO='<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
@@ -295,10 +297,47 @@ const corIc=c=>c.cor||(chaveIc(c)==='carteira'||chaveIc(c)==='dinheiro'?'#0F766E
 const icConta=(c,st='')=>`<div class="icx" style="background:${corIc(c)};${st}">${SVG(ICONES[chaveIc(c)].p)}</div>`;
 // ---- Caixinhas: sub-contas dentro de uma conta (ex.: Nubank › Viagem) ----
 const ehCx=c=>!!(c&&c.pai);
+// ===== CARTÃO DE CRÉDITO =====
+// conta com credito:true, fecha (dia do fechamento), vence (dia do vencimento), limite.
+// Compras no cartão contam como despesa no mês da compra, mas só saem do banco quando você paga a fatura
+// (o pagamento é uma transferência banco → cartão, por isso não conta duas vezes).
+const ehCartao=c=>!!(c&&c.credito);
+const cartoes=()=>D.contas.filter(ehCartao);
+const diaEm=(m,d)=>m+'-'+String(Math.min(d,ultDia(m))).padStart(2,'0');
+// em qual fatura (mês de vencimento) cai uma compra
+function mesFatura(c,data){
+  const m=data.slice(0,7),dia=+data.slice(8),fecha=Math.min(c.fecha||1,ultDia(m));
+  let mf=dia>=fecha?addMes(m,1):m;          // mês em que a fatura fecha
+  return (c.vence||10)>(c.fecha||1)?mf:addMes(mf,1); // mês em que vence
+}
+const vencFatura=(c,mv)=>diaEm(mv,c.vence||10);
+const fechaFatura=(c,mv)=>{const mf=(c.vence||10)>(c.fecha||1)?mv:addMes(mv,-1);return diaEm(mf,c.fecha||1)};
+function fatura(c,mv){
+  const itens=D.lancs.filter(l=>l.conta===c.id&&!l.grupo&&(l.tipo==='despesa'||l.tipo==='receita')&&mesFatura(c,l.data)===mv)
+    .sort((a,b)=>b.data.localeCompare(a.data));
+  let total=soma(itens.filter(l=>l.tipo==='despesa'))-soma(itens.filter(l=>l.tipo==='receita'));
+  if(c.abertoVenc===mv)total+=c.abertoIni||0;
+  const pago=soma(D.lancs.filter(l=>l.tipo==='transf'&&l.dest===c.id&&l.fatura===mv));
+  total=Math.round(total*100)/100;
+  const h=hoje(),venc=vencFatura(c,mv),fechou=h>=fechaFatura(c,mv);
+  return{mv,itens,total,pago,resta:Math.max(0,Math.round((total-pago)*100)/100),venc,fecha:fechaFatura(c,mv),fechou,quitada:total>0&&pago>=total-0.005};
+}
+const faturaAtual=c=>mesFatura(c,hoje()); // fatura que está recebendo as compras de hoje
+const dividaCartao=c=>Math.max(0,-saldoConta(c.id));
+const dividaCartoes=()=>cartoes().reduce((a,c)=>a+dividaCartao(c),0);
+// faturas fechadas (ou vencendo) ainda não pagas, para alertas e lembretes
+function faturasAPagar(){
+  const out=[],h=hoje();
+  cartoes().forEach(c=>{const atual=faturaAtual(c);
+    for(let i=-3;i<=0;i++){const f=fatura(c,addMes(atual,i));
+      if(f.resta>0.005&&(f.fechou||f.venc<=addDias(h,7)))out.push({c,...f})}});
+  return out.sort((a,b)=>a.venc.localeCompare(b.venc));
+}
+
 const principais=()=>D.contas.filter(c=>!c.pai);
 const caixinhas=paiId=>D.contas.filter(c=>c.pai===paiId);
 const nomeConta=id=>{const c=conta(id);if(!c)return'';const p=c.pai&&conta(c.pai);return p?p.nome+' › '+c.nome:c.nome};
-const saldoDisponivel=ate=>principais().reduce((a,c)=>a+saldoConta(c.id,ate),0);
+const saldoDisponivel=ate=>principais().filter(c=>!ehCartao(c)).reduce((a,c)=>a+saldoConta(c.id,ate),0);
 const saldoGuardado=ate=>D.contas.filter(ehCx).reduce((a,c)=>a+saldoConta(c.id,ate),0);
 // líquido guardado nas caixinhas no mês (transferências entre conta e caixinha)
 function guardadoNoMes(m){
@@ -600,7 +639,7 @@ function cardDiario(){
     expl=`Das ${R(rec)} de entradas do mês${aReceber?' ('+R(aReceber)+' ainda a receber)':''}, já saíram ${R(desp)} em despesas${pend?', faltam '+R(pend)+' de contas a pagar':''}${guard?', '+R(guard)+' foram para caixinhas':''}${falta?' e faltam '+R(falta)+' para a reserva':''}.`;
   }else{
     const futR=soma(doM.filter(l=>l.tipo==='receita'&&l.data>h&&!naCx(l))),futD=soma(doM.filter(l=>l.tipo==='despesa'&&l.data>h&&!naCx(l)));
-    disp=saldoDisponivel(h)+futR+aReceber-futD-pend;livre=disp-falta;
+    disp=saldoDisponivel(h)+futR+aReceber-futD-pend-dividaCartoes();livre=disp-falta;
     expl=`Do disponível nas contas${aReceber?', somando '+R(aReceber)+' a receber':''}, já descontando ${R(pend)} de contas a pagar${futD||futR?', os lançamentos previstos':''}${falta?' e o que falta guardar ('+R(falta)+')':''}. Não conta o dinheiro das caixinhas.`;
   }
   const porDia=livre/diasRest;
@@ -761,6 +800,7 @@ function tInicio(){
   ${barraRapida()}
   ${venc.length?`<div class="alerta">⚠️ ${venc.length} conta(s) vencida(s) sem pagamento: ${venc.map(p=>esc(p.desc)).join(', ')}</div>`:''}
   ${prox.length?`<div class="alerta">⏰ Vence em até 5 dias: ${prox.map(p=>esc(p.desc)+' ('+dataBR(p.venc)+')').join(', ')}</div>`:''}
+  ${faturasAPagar().filter(f=>f.venc<=addDias(h,5)).map(f=>`<div class="alerta" style="display:flex;gap:8px;align-items:center"><span style="flex:1">💳 Fatura ${esc(f.c.nome)} ${R(f.resta)} ${f.venc<h?'<b>venceu</b> '+dataBR(f.venc):'vence '+dataBR(f.venc)}</span><button class="btnp" style="background:#78350f;color:#fde68a" onclick="pagarFatura('${f.c.id}','${f.mv}')">Pagar</button></div>`).join('')}
   ${orcAlerta.map(([c,v])=>{const st=statusOrc(mes,c,v);return`<div class="alerta" style="display:flex;gap:8px;align-items:center"><span style="flex:1">📊 ${esc(c)}: ${st.estourou?`passou ${R(st.g-v)} do orçamento (${R(st.g)} de ${R(v)})`:`já usou ${Math.round(st.p)}% do orçamento`}</span><button class="btnp" style="background:#78350f;color:#fde68a" onclick="dispensarAlerta('${esc(c)}')">Ok</button></div>`}).join('')}
   <div class="card">
     <h3>Saldo total hoje <button class="olho" title="${D.oculto?'Mostrar valores':'Ocultar valores'}" onclick="D.oculto=!D.oculto;salva();render()">${SVG(D.oculto?OLHO_F:OLHO)}</button></h3>
@@ -772,6 +812,7 @@ function tInicio(){
       <div class="mini"><small>Resultado do mês</small><b class="${r.s>=0?'pos':'neg'}">${R(r.s)}</b></div>
       <div class="mini"><small>Falta pagar no mês</small><b class="amar">${R(totPend)}</b></div>
       <div class="mini"><small>A receber no mês</small><b class="pos">${R(recPend)}</b></div>
+      ${cartoes().length?`<div class="mini" onclick="verFatura('${cartoes()[0].id}')"><small>💳 Devo nos cartões</small><b class="neg">${R(dividaCartoes())}</b></div>`:''}
     </div>
   </div>
   ${cd}
@@ -1012,6 +1053,7 @@ function tMais(){
     <p style="color:var(--mut);font-size:12px;margin-top:8px">${gs.length?'':'Nenhum grupo ainda. Ao lançar, marque “📌 Separar do saldo e do gráfico principal” e dê um nome.'} Esses lançamentos têm saldo e gráfico próprios e não afetam o saldo das contas.</p>
     ${gs.map(g=>`<div class="item" onclick="formSaldoGrupo('${esc(g).replace(/'/g,"\\'")}')"><div class="ic">📌</div><div class="info"><b>${esc(g)}</b><small>Toque para ajustar o saldo inicial</small></div><div class="val ${saldoGrupo(g,h)<0?'neg':''}">${R(saldoGrupo(g,h))}</div></div>`).join('')}
   </div>
+  ${cardLembretes()}
   <div class="card"><h3>👤 Seu nome</h3><div class="item" onclick="formNome()" style="padding:0"><div class="info"><b>${D.nome?esc(D.nome):'Não definido'}</b><small>Usado na saudação da tela inicial</small></div><button class="btnp">✏️ Alterar</button></div></div>
   <div class="card"><h3>🔒 Bloqueio por PIN</h3>
     ${temPin()?`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">Ativado neste aparelho. O app pede o PIN ao abrir e depois de 1 minuto fora dele.</p>
@@ -1020,7 +1062,7 @@ function tMais(){
   </div>
   <div class="card"><h3>Contas e carteiras <button class="btnp" onclick="formConta()">+ Conta</button></h3>
     ${listaContas(true)}
-    <p style="color:var(--mut);font-size:12px;margin-top:8px">🐷 Caixinhas separam parte do dinheiro dentro da conta (como no Nubank e no PicPay). Toque numa conta para criar.</p>
+    <p style="color:var(--mut);font-size:12px;margin-top:8px">🐷 Caixinhas separam parte do dinheiro dentro da conta (como no Nubank e no PicPay). Toque numa conta para criar.<br>💳 Para cartão de crédito, toque em <b>+ Conta</b> e marque “É um cartão de crédito”.</p>
   </div>
   <div class="card"><h3>💾 Backup dos seus dados</h3>
     <p style="color:var(--mut);font-size:13px;margin-bottom:10px">Uma cópia extra de segurança, além da nuvem.</p>
@@ -1032,6 +1074,7 @@ function tMais(){
   </div>
   <div class="card"><h3>Zona de perigo</h3><button class="btn perigo" onclick="zerar()">🗑️ Apagar todos os lançamentos e dados</button></div>
   <p class="vazio">${D.lancs.length} lançamentos · ${D.pagar.length} contas a pagar · ${D.receber.length} entradas previstas<br>Fatiô v${VERSAO} · <a href="privacidade.html">Política de privacidade</a></p>`;
+  document.querySelectorAll('#lDias button').forEach(b=>b.onclick=()=>{const cf=cfgLemb();cf.dias=+b.dataset.d;localStorage.setItem(LEMB_K,JSON.stringify(cf));localStorage.removeItem('fatioLembDia');agendaLembretes();render()});
   document.querySelectorAll('#temaBtns button').forEach(b=>{b.classList.toggle('on',b.dataset.tema===temaPref());b.onclick=()=>{D.tema=b.dataset.tema;salva();aplicaTema();render()}});
   $('#optOL').onchange=e=>{D.ocultaSepLanc=e.target.checked;salva();toast(e.target.checked?'🙈 Transações 📌 ocultas do extrato':'👁️ Transações 📌 visíveis no extrato')};
   $('#optGE').onchange=e=>{D.grafExtra=e.target.checked;salva();toast(e.target.checked?'📌 Gráfico separado visível na tela inicial':'Gráfico separado oculto')};
@@ -1046,7 +1089,7 @@ function zerar(){if(confirm('Apagar TUDO? Isso não pode ser desfeito (inclusive
 // ================== FORMULÁRIOS ==================
 function abrir(h){$('#modal').innerHTML=`<div class="modal" onclick="if(event.target===this)fechar()"><div class="sheet">${h}</div></div>`}
 function fechar(){$('#modal').innerHTML='';if(remotoPendente){const r=remotoPendente;remotoPendente=null;aplicaRemoto(...r)}else render()}
-const optsConta=sel=>principais().map(c=>[c,...caixinhas(c.id)]).flat().map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.pai?'\u00a0\u00a0\u00a0↳ '+(c.ic||'🐷')+' '+esc(nomeConta(c.id)):esc(c.nome)}</option>`).join('');
+const optsConta=sel=>principais().map(c=>[c,...caixinhas(c.id)]).flat().map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${c.pai?'\u00a0\u00a0\u00a0↳ '+(c.ic||'🐷')+' '+esc(nomeConta(c.id)):(ehCartao(c)?'💳 ':'')+esc(c.nome)}</option>`).join('');
 const optsCat=(t,sel)=>categorias(t).map(c=>`<option value="${esc(c)}" ${c===sel?'selected':''}>${icCat(t,c)} ${esc(c)}</option>`).join('');
 function formLanc(id,pre){
   pre=pre||{};
@@ -1207,6 +1250,11 @@ function formCategoria(cat){
 function listaContas(edicao){
   const h=hoje();
   return principais().map(c=>{
+    if(ehCartao(c)){const f=fatura(c,faturaAtual(c)),dv=dividaCartao(c),lim=c.limite||0;
+      return`<div class="item" onclick="${edicao?`formConta('${c.id}')`:`verFatura('${c.id}')`}">${icConta(c)}
+      <div class="info"><b>${esc(c.nome)}</b><small>Fatura atual ${R(f.total)} · vence ${dataBR(f.venc)}${lim?' · livre '+R(Math.max(0,lim-dv)):''}</small>
+      ${lim?`<div class="barra" style="height:5px"><i style="width:${Math.min(100,dv/lim*100)}%;background:${dv/lim>.85?'var(--verm)':'var(--azul)'}"></i></div>`:''}</div>
+      <div class="val neg">${dv?'-'+R(dv).replace('-',''):R(0)}</div></div>`}
     const cx=caixinhas(c.id),sd=saldoConta(c.id,h),tot=sd+cx.reduce((a,x)=>a+saldoConta(x.id,h),0);
     return`<div class="item" ${edicao?`onclick="formConta('${c.id}')"`:''}>${icConta(c)}
       <div class="info"><b>${esc(c.nome)}</b><small>${cx.length?'Disponível '+R(sd):edicao?'Saldo inicial '+R(c.saldoIni):''}</small></div>
@@ -1218,6 +1266,41 @@ function listaContas(edicao){
       <div style="text-align:right"><div class="val pos">${R(s)}</div>
       <div style="display:flex;gap:4px;margin-top:4px"><button class="btnp" onclick="event.stopPropagation();movCaixinha('${x.id}',1)">+ Guardar</button><button class="btnp" onclick="event.stopPropagation();movCaixinha('${x.id}',-1)">Resgatar</button></div></div></div>`}).join('');
   }).join('');
+}
+let fatSel={};
+function verFatura(id,mv){
+  const c=conta(id);if(!c)return;mv=mv||fatSel[id]||faturaAtual(c);fatSel[id]=mv;
+  const f=fatura(c,mv),h=hoje();
+  const st=f.quitada?'<span class="pos">✅ Paga</span>':!f.fechou?'<span style="color:var(--azul)">🟦 Aberta</span>':f.venc<h?'<span class="neg">⚠️ Vencida</span>':'<span class="amar">🟡 Fechada</span>';
+  abrir(`<h2 style="display:flex;align-items:center;gap:10px">${icConta(c)} ${esc(c.nome)}</h2>
+   <div class="chips" style="align-items:center;justify-content:space-between"><button class="chip" id="fAnt">‹</button><b style="text-transform:capitalize">Fatura de ${nomeMes(mv)}</b><button class="chip" id="fProx">›</button></div>
+   <div class="card" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between"><small style="color:var(--mut)">Total</small>${st}</div>
+     <div class="grande">${R(f.total)}</div>
+     <small style="color:var(--mut)">Fecha ${dataBR(f.fecha)} · vence ${dataBR(f.venc)}${f.pago?` · pago ${R(f.pago)}`:''}</small>
+     ${c.limite?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:10px;color:var(--mut)"><span>Limite usado ${R(dividaCartao(c))}</span><span>Livre ${R(Math.max(0,c.limite-dividaCartao(c)))}</span></div>
+     <div class="barra"><i style="width:${Math.min(100,dividaCartao(c)/c.limite*100)}%;background:var(--azul)"></i></div>`:''}
+   </div>
+   ${f.resta>0?`<button class="btn" id="fPagar">Pagar fatura · ${R(f.resta)}</button>`:''}
+   <div style="margin-top:10px">${f.itens.map(l=>`<div class="item" onclick="formLanc('${l.id}')"><div class="ic">${icCat(l.tipo,l.cat)}</div>
+     <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${dataBR(l.data)} · ${esc(l.cat)}</small></div>
+     <div class="val ${l.tipo==='receita'?'pos':''}">${l.tipo==='receita'?'-':''}${R(l.valor)}</div></div>`).join('')
+     ||(c.abertoVenc===mv&&c.abertoIni?'':'<div class="vazio">Nenhuma compra nesta fatura</div>')}
+     ${c.abertoVenc===mv&&c.abertoIni?`<div class="item"><div class="ic">📄</div><div class="info"><b>Saldo em aberto ao cadastrar</b></div><div class="val">${R(c.abertoIni)}</div></div>`:''}</div>
+   <div class="linha"><button class="btn sec" onclick="fechar()">Fechar</button><button class="btn sec" onclick="formLanc(null,{tipo:'despesa',conta:'${c.id}'})">+ Compra</button></div>`);
+  $('#fAnt').onclick=()=>verFatura(id,addMes(mv,-1));$('#fProx').onclick=()=>verFatura(id,addMes(mv,1));
+  if($('#fPagar'))$('#fPagar').onclick=()=>pagarFatura(id,mv);
+}
+function pagarFatura(id,mv){
+  const c=conta(id),f=fatura(c,mv),bancos=principais().filter(x=>!ehCartao(x));
+  abrir(`<h2>💳 Pagar fatura ${esc(c.nome)}</h2><p style="color:var(--mut);font-size:13px">Fatura de ${nomeMes(mv)} · vence ${dataBR(f.venc)}</p>
+   <label>Valor pago</label><input id="fv2" inputmode="decimal" value="${String(f.resta).replace('.',',')}">
+   <label>Pagou com</label><select id="fc2">${bancos.map(b=>`<option value="${b.id}">${esc(b.nome)}</option>`).join('')}</select>
+   <label>Data</label><input id="fd2" type="date" value="${hoje()}">
+   <p style="color:var(--mut);font-size:12px;margin-top:8px">As compras já contaram como despesa no mês em que foram feitas. O pagamento só tira o dinheiro do banco, sem contar duas vezes.</p>
+   <div class="linha"><button class="btn sec" onclick="verFatura('${id}','${mv}')">Voltar</button><button class="btn" id="ok">Confirmar</button></div>`);
+  $('#ok').onclick=()=>{const v=num($('#fv2').value);if(v<=0)return alert('Informe o valor');
+    D.lancs.push({id:uid(),tipo:'transf',valor:v,desc:'Fatura '+c.nome+' '+nomeMes(mv),cat:'',conta:$('#fc2').value,dest:id,data:$('#fd2').value||hoje(),fatura:mv});
+    salva();fechar();toast(v>=f.resta-0.005?'✅ Fatura paga!':'✅ Pagamento parcial registrado')};
 }
 function movCaixinha(id,sinal){
   const x=conta(id),p=conta(x.pai),h=hoje();
@@ -1268,8 +1351,16 @@ function formConta(id){
    <label>Nome</label><input id="cn" placeholder="Ex.: Nubank, Itaú, Carteira" value="${esc(c.nome)}">
    <label>Ícone</label><div class="gIc">${Object.entries(ICONES).map(([k,v])=>`<button data-ic="${k}">${SVG(v.p)}<span>${v.n}</span></button>`).join('')}</div>
    <label>Cor</label><div class="gCor">${CORES_CONTA.map(([h,n])=>`<button data-cor="${h}" title="${n}" style="background:${h}"></button>`).join('')}</div>
-   <label>Saldo inicial (R$)</label><input id="cs" inputmode="decimal" value="${String(c.saldoIni).replace('.',',')}">
-   ${id?`<label style="margin-top:16px">🐷 Caixinhas desta conta</label>
+   <div class="caixaSep"><div class="check"><input type="checkbox" id="ccred" ${c.credito?'checked':''}><span>💳 É um cartão de crédito</span></div>
+     <div id="bCred" class="${c.credito?'':'oculto'}">
+       <div class="grid2"><div><label>Dia do fechamento</label><input id="cfe" type="number" min="1" max="31" value="${c.fecha||''}" placeholder="Ex.: 28"></div>
+       <div><label>Dia do vencimento</label><input id="cve" type="number" min="1" max="31" value="${c.vence||''}" placeholder="Ex.: 5"></div></div>
+       <label>Limite (R$, opcional)</label><input id="cli" inputmode="decimal" value="${c.limite?String(c.limite).replace('.',','):''}">
+       ${id?'':`<label>Fatura em aberto hoje (R$)</label><input id="cab" inputmode="decimal" placeholder="0,00">
+       <small style="color:var(--mut);font-size:12px;display:block;margin-top:4px">O que já está na fatura atual antes de começar a lançar no app.</small>`}
+     </div></div>
+   <div id="bSaldoIni"><label>Saldo inicial (R$)</label><input id="cs" inputmode="decimal" value="${String(c.saldoIni).replace('.',',')}"></div>
+   ${id&&!c.credito?`<label style="margin-top:16px">🐷 Caixinhas desta conta</label>
      ${caixinhas(id).map(x=>`<div class="item" onclick="formCaixinha('${id}','${x.id}')"><div class="ic">${x.ic||'🐷'}</div><div class="info"><b>${esc(x.nome)}</b></div><div class="val pos">${R(saldoConta(x.id,hoje()))}</div></div>`).join('')||'<small style="color:var(--mut);font-size:12px">Nenhuma ainda. Separe parte do saldo como no app do banco.</small>'}
      <button class="btn sec" style="margin-top:8px" onclick="formCaixinha('${id}')">+ Nova caixinha</button>`:''}
    <div class="linha">${id&&principais().length>1?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
@@ -1281,10 +1372,76 @@ function formConta(id){
   document.querySelectorAll('.gCor button').forEach(b=>b.onclick=()=>{cor=b.dataset.cor;corManual=true;pinta()});
   $('#cn').oninput=()=>{const n=$('#cn').value;if(!icManual){const s=icSugerido(n);if(s)ic=s}if(!corManual){const s=corSugerida(n);if(s)cor=s}pinta()};
   pinta();
+  const mCred=()=>{$('#bCred').classList.toggle('oculto',!$('#ccred').checked);$('#bSaldoIni').classList.toggle('oculto',$('#ccred').checked)};
+  $('#ccred').onchange=mCred;mCred();
+  document.querySelectorAll('.gIc button').forEach(b=>b.addEventListener('click',()=>{if(!id&&b.dataset.ic==='cartao'){$('#ccred').checked=true;mCred()}}));
   if($('#del'))$('#del').onclick=()=>{if(caixinhas(id).length)return alert('Exclua as caixinhas desta conta antes.');if(D.lancs.some(l=>l.conta===id||l.dest===id))return alert('Essa conta tem lançamentos. Exclua ou mova os lançamentos antes.');
     if(confirm('Excluir conta?')){D.contas=D.contas.filter(x=>x.id!==id);salva();fechar()}};
   $('#ok').onclick=()=>{const s=$('#cs').value.trim(),neg=s.startsWith('-');const o={nome:$('#cn').value.trim(),ic,cor,saldoIni:(neg?-1:1)*num(s.replace('-',''))};
-    if(!o.nome)return alert('Informe o nome');if(id)Object.assign(c,o);else D.contas.push({...o,id:uid()});salva();fechar()};
+    if(!o.nome)return alert('Informe o nome');
+    if($('#ccred').checked){
+      if(id&&!c.credito&&caixinhas(id).length)return alert('Exclua as caixinhas desta conta antes de transformá-la em cartão.');
+      const fe=+$('#cfe').value,ve=+$('#cve').value;if(!(fe>=1&&fe<=31&&ve>=1&&ve<=31))return alert('Informe os dias de fechamento e vencimento (1 a 31)');
+      Object.assign(o,{credito:true,fecha:fe,vence:ve,limite:num($('#cli').value)});
+      if(!id){const ab=num($('#cab').value);o.saldoIni=-ab;if(ab>0){o.abertoIni=ab;o.abertoVenc=null}}
+      else o.saldoIni=c.saldoIni;
+    }else if(id&&c.credito){delete c.credito;delete c.fecha;delete c.vence;delete c.limite;delete c.abertoIni;delete c.abertoVenc}
+    if(id)Object.assign(c,o);else{const n={...o,id:uid()};if(n.abertoIni)n.abertoVenc=faturaAtual(n);D.contas.push(n)}
+    salva();fechar();if($('#ccred')&&o.credito&&!id)toast('💳 Cartão criado! Lance as compras escolhendo ele como conta')};
+}
+// ================== LEMBRETES (notificações) ==================
+const LEMB_K='fatioLembrete';
+const cfgLemb=()=>{try{return JSON.parse(localStorage.getItem(LEMB_K))||{on:false,dias:1}}catch(_){return{on:false,dias:1}}};
+const suportaNotif=()=>'Notification' in window&&'serviceWorker' in navigator;
+// tudo que vence até hoje + N dias e ainda não foi pago (contas a pagar e faturas)
+function itensLembrete(dias){
+  const h=hoje(),lim=addDias(h,dias),m=h.slice(0,7),out=[];
+  [addMes(m,-1),m,addMes(m,1)].forEach(mm=>pagarPrinc(mm).filter(p=>!p.pago&&p.venc<=lim).forEach(p=>out.push({d:p.desc,v:p.valor,venc:p.venc})));
+  faturasAPagar().filter(f=>f.venc<=lim).forEach(f=>out.push({d:'Fatura '+f.c.nome,v:f.resta,venc:f.venc}));
+  return out.filter(x=>x.venc>=addDias(h,-31)).sort((a,b)=>a.venc.localeCompare(b.venc));
+}
+function textoLembrete(it){const h=hoje();
+  return it.slice(0,4).map(x=>`${x.d} ${R(x.v)} ${x.venc<h?'venceu '+dataBR(x.venc):x.venc===h?'vence hoje':x.venc===addDias(h,1)?'vence amanhã':'vence '+dataBR(x.venc)}`).join(' · ')+(it.length>4?` · +${it.length-4}`:'')}
+// guarda a agenda para o service worker conseguir avisar com o app fechado (onde o celular permitir)
+async function agendaLembretes(){
+  try{if(!('caches' in window))return;const c=await caches.open('fatio-dados');const cf=cfgLemb();
+    const lista=[];const h=hoje(),m=h.slice(0,7);
+    [m,addMes(m,1)].forEach(mm=>pagarPrinc(mm).filter(p=>!p.pago).forEach(p=>lista.push({d:p.desc,v:p.valor,venc:p.venc})));
+    faturasAPagar().forEach(f=>lista.push({d:'Fatura '+f.c.nome,v:f.resta,venc:f.venc}));
+    cartoes().forEach(c2=>{const f=fatura(c2,addMes(faturaAtual(c2),0));if(f.resta>0&&!lista.some(x=>x.d==='Fatura '+c2.nome&&x.venc===f.venc))lista.push({d:'Fatura '+c2.nome,v:f.resta,venc:f.venc})});
+    await c.put('./lembretes.json',new Response(JSON.stringify({on:cf.on&&Notification.permission==='granted',dias:cf.dias,oculto:!!D.oculto,lista})));
+  }catch(_){}
+}
+async function avisarAgora(forcar){
+  const cf=cfgLemb();if(!cf.on||!suportaNotif()||Notification.permission!=='granted')return;
+  const h=hoje();if(!forcar&&localStorage.getItem('fatioLembDia')===h)return;
+  const it=itensLembrete(cf.dias);if(!it.length){if(forcar)toast('✅ Nada vencendo agora');return}
+  localStorage.setItem('fatioLembDia',h);
+  try{const reg=await navigator.serviceWorker.ready;
+    await reg.showNotification(it.length===1?'🔔 1 conta para pagar':'🔔 '+it.length+' contas para pagar',{body:D.oculto?it.map(x=>x.d).join(' · '):textoLembrete(it),icon:'icon-192.png',badge:'icon-192.png',tag:'fatio-lembrete',data:{url:'./?aba=contas'}})}catch(_){}
+}
+async function ativarLembretes(){
+  if(!suportaNotif())return alert('Este aparelho/navegador não suporta notificações. No iPhone, instale o app na tela inicial (iOS 16.4 ou mais novo).');
+  const p=await Notification.requestPermission();
+  if(p!=='granted')return alert('Notificações bloqueadas. Libere em Configurações do celular → Apps → Fatiô → Notificações.');
+  const cf=cfgLemb();cf.on=true;localStorage.setItem(LEMB_K,JSON.stringify(cf));
+  try{const reg=await navigator.serviceWorker.ready;
+    if('periodicSync' in reg){const st=await navigator.permissions.query({name:'periodic-background-sync'}).catch(()=>({state:'denied'}));
+      if(st.state==='granted')await reg.periodicSync.register('fatio-lembretes',{minInterval:12*60*60*1000})}}catch(_){}
+  await agendaLembretes();render();toast('🔔 Lembretes ativados');avisarAgora(true);
+}
+function desativarLembretes(){const cf=cfgLemb();cf.on=false;localStorage.setItem(LEMB_K,JSON.stringify(cf));agendaLembretes();
+  navigator.serviceWorker?.ready.then(r=>r.periodicSync?.unregister('fatio-lembretes')).catch(()=>{});render();toast('🔕 Lembretes desativados')}
+function cardLembretes(){
+  const cf=cfgLemb(),perm=suportaNotif()?Notification.permission:'nao';
+  return`<div class="card"><h3>🔔 Lembretes de contas</h3>
+   ${cf.on&&perm==='granted'?`<p style="color:var(--mut);font-size:13px;margin-bottom:8px">Ativado neste aparelho. Avisa contas a pagar e faturas de cartão.</p>
+     <label style="margin-top:0">Avisar com antecedência de</label>
+     <div class="tipos" id="lDias">${[[0,'No dia'],[1,'1 dia antes'],[3,'3 dias antes']].map(([d,n])=>`<button data-d="${d}" class="${cf.dias===d?'on':''}">${n}</button>`).join('')}</div>
+     <div class="linha"><button class="btn sec" onclick="avisarAgora(true)">Testar agora</button><button class="btn sec" onclick="desativarLembretes()">Desativar</button></div>`
+   :`<p style="color:var(--mut);font-size:13px;margin-bottom:10px">${perm==='nao'?'Este navegador não suporta notificações.':perm==='denied'?'Notificações bloqueadas no celular. Libere em Configurações → Apps → Fatiô → Notificações.':'Receba um aviso no celular quando uma conta ou fatura estiver para vencer.'}</p>
+     ${perm!=='nao'?'<button class="btn" onclick="ativarLembretes()">🔔 Ativar lembretes</button>':''}`}
+   <p style="color:var(--mut);font-size:12px;margin-top:8px">O aviso chega sempre que você abre o app. Com o app fechado, o Android avisa sozinho quando o sistema permite (app instalado). No iPhone, só ao abrir.</p></div>`;
 }
 // ================== PIN ==================
 const PINK='fatioPin';
@@ -1372,6 +1529,10 @@ addEventListener('resize',()=>{if(aba==='inicio'&&!$('#modal').innerHTML&&docume
 montaTeclado();
 render();
 if(rolarPara)requestAnimationFrame(()=>scrollTo(0,rolarPara));
+// abrir pela notificação → vai direto para A pagar
+{const ab=new URLSearchParams(location.search).get('aba');if(ab&&['inicio','lanc','contas','receber','planos','mais'].includes(ab)){aba=ab;history.replaceState(null,'',location.pathname);render()}}
+setTimeout(()=>{agendaLembretes();avisarAgora()},2500);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(avisarAgora,1500)});
 // atalhos do ícone (segurar o ícone → Nova despesa / Nova receita)
 const novoTipo=new URLSearchParams(location.search).get('novo');
 if(novoTipo==='despesa'||novoTipo==='receita'){
