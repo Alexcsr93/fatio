@@ -81,7 +81,10 @@ input,select{width:100%;background:var(--card2);border:1px solid var(--borda);co
 .linha{display:flex;gap:8px;margin-top:14px}
 .vazio{color:var(--mut);text-align:center;padding:16px 0;font-size:14px}
 .vazio a{color:var(--mut)}
-.olho{background:none;border:none;color:var(--mut);font-size:18px}
+.olho{background:none;border:none;color:var(--mut);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:10px}
+.olho svg{width:20px;height:20px}
+.olho:active{background:var(--card2)}
+.tag.pt{background:#78350f55;color:var(--amar)}
 .check{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .check input{width:20px;height:20px;flex-shrink:0}
 .caixaSep{background:var(--card2);border:1px solid var(--borda);border-radius:12px;padding:2px 12px 12px;margin-top:12px}
@@ -186,7 +189,7 @@ canvas{max-width:100%}
 </div>
 <script>
 // ================== DADOS ==================
-const VERSAO='1.6.0';
+const VERSAO='1.7.0';
 const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
@@ -264,6 +267,8 @@ function saldoConta(id,ate){
 const saldoTotal=ate=>D.contas.reduce((a,c)=>a+saldoConta(c.id,ate),0);
 // ---- Ícones modernos das contas (SVG, traço) ----
 const SVG=p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const OLHO='<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>';
+const OLHO_F='<path d="M10.6 5.1A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.9 3.8M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.9 0 3.5-.6 4.9-1.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m3 3 18 18"/>';
 const ICONES={
   banco:{n:'Banco',p:'<path d="M3 10 12 4l9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 21h18"/>'},
   digital:{n:'Banco digital',p:'<rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/><path d="M9.5 9.5h5M9.5 12.5h3"/>'},
@@ -513,6 +518,31 @@ function statusOrc(m,c,v){
   return{g,fixo,varia,p,estourou,alerta,cor,soFixo:g>0&&varia<=0.005};
 }
 function dispensarAlerta(c){D.alertaOk=D.alertaOk||{};D.alertaOk[mes+'|'+c]=Math.round(soma(doMes(mes).filter(l=>l.tipo==='despesa'&&l.cat===c))*100);salva();render()}
+// ===== RITMO NORMAL E GASTOS PONTUAIS =====
+// gasto do dia a dia = despesa que não é conta fixa (A pagar), não é parcela, não está em caixinha e não é 📌
+function ehVariavel(l,ids){return l.tipo==='despesa'&&!l.grupo&&!ids.has(l.id)&&!ehCx(conta(l.conta))&&!/\s\d+\/\d+$/.test(l.desc||'')}
+// média mensal de gastos do dia a dia nos 3 meses anteriores (base para achar o que é "fora do normal")
+function mediaMensalVar(m){
+  const ids=idsDeContas();let tot=0,n=0;
+  for(let i=1;i<=3;i++){const mm=addMes(m,-i),ls=doMes(mm).filter(l=>ehVariavel(l,ids)&&l.pontual!==true);if(ls.length){tot+=soma(ls);n++}}
+  return n?tot/n:0;
+}
+// automático: despesa ≥ R$ 300 e ≥ 25% do que você gasta num mês normal (sem histórico: ≥ R$ 500)
+function pontualAuto(l,media){if(l.tipo!=='despesa')return false;return media>0?(l.valor>=300&&l.valor>=media*.25):l.valor>=500}
+function ehPontual(l,media){if(l.pontual===true)return true;if(l.pontual===false)return false;return pontualAuto(l,media??mediaMensalVar(l.data.slice(0,7)))}
+// ritmo normal por dia: média dos últimos 3 meses sem os pontuais (ou do mês atual, se ainda não há histórico)
+function ritmoInfo(m){
+  const ids=idsDeContas(),h=hoje(),media=mediaMensalVar(m);
+  let tot=0,dias=0;
+  for(let i=1;i<=3;i++){const mm=addMes(m,-i),ls=doMes(mm).filter(l=>ehVariavel(l,ids));
+    if(ls.length){tot+=soma(ls.filter(l=>!ehPontual(l,mediaMensalVar(mm))));dias+=ultDia(mm)}}
+  const doM=doMes(m).filter(l=>ehVariavel(l,ids)&&l.data<=h);
+  const pont=doM.filter(l=>ehPontual(l,media)),normal=doM.filter(l=>!ehPontual(l,media));
+  const diaHj=m===h.slice(0,7)?+h.slice(8):ultDia(m);
+  const fonte=dias?'hist':'mes';
+  const porDia=dias?tot/dias:(diaHj?soma(normal)/diaHj:0);
+  return{porDia,fonte,pont,gastoNormal:soma(normal),esperado:porDia*diaHj,media};
+}
 function primeiroNome(n){n=String(n||'').trim().split(/\s+/)[0]||'';return n.charAt(0).toUpperCase()+n.slice(1)}
 function saudacao(){const hr=new Date().getHours();return hr>=5&&hr<12?'Bom dia':hr>=12&&hr<18?'Boa tarde':'Boa noite'}
 function fraseContexto(){
@@ -527,11 +557,9 @@ function fraseContexto(){
   const d=window._diario;
   if(d){
     if(d.zero)return'🔻 Sem margem para gastar este mês';
-    if(d.porDia>0){const p=d.gHoje/d.porDia;
-      if(p>1)return`🔻 Você passou ${R(d.gHoje-d.porDia)} do limite de hoje`;
-      if(p>=.75)return'🟡 Perto do limite de hoje';
-      if(d.gHoje>0)return`✅ Dentro do limite de hoje · restam ${R(d.porDia-d.gHoje)}`;
-      return`✅ Você pode gastar até ${R(d.porDia)} hoje`}
+    if(d.sobra<0)return`🔻 No seu ritmo normal, faltam ${R(-d.sobra)} no fim do mês`;
+    if(d.acima)return'🟡 Gastando acima do seu normal este mês';
+    return`✅ No seu ritmo · deve sobrar ${R(d.sobra)}`;
   }
   if(d&&d.reservaOk)return'🐷 Reserva do mês cumprida!';
   return'';
@@ -552,10 +580,10 @@ function formNome(){
 function cardDiario(){
   window._diario=null;
   const h=hoje(),m=h.slice(0,7),base=baseDiaria();
-  const tit=`<h3>📅 Quanto posso gastar por dia <button class="btnp" onclick="formReserva()">⚙️ Ajustar</button></h3>`;
+  const tit=`<h3>💸 Livre no mês <button class="btnp" onclick="formReserva()">⚙️ Ajustar</button></h3>`;
   const rodapeBase=`<small style="margin-top:8px;opacity:.8">Base: ${base==='entradas'?'📥 entradas do mês':'💳 saldo das contas'}${D.reserva&&D.reserva.v>0?' · 🐷 reserva de '+txtReserva(m):''}</small>`;
   if(D.lancs.length===0&&D.contas.every(c=>!c.saldoIni))
-    return`<div class="card diario">${tit}<small>Lance sua renda do mês (ex.: "+ salário 3500") e cadastre suas contas fixas em 🧾 A pagar para calcular.</small></div>`;
+    return`<div class="card diario">${tit}<small>Lance sua renda do mês (ex.: "+ salário 3500") e cadastre suas contas fixas em 🧾 A pagar para calcular quanto está livre.</small></div>`;
   const dia=+h.slice(8),diasRest=ultDia(m)-dia+1;
   const doM=doMes(m),ids=idsDeContas();
   const naCx=l=>ehCx(conta(l.conta));
@@ -577,34 +605,46 @@ function cardDiario(){
   }
   const porDia=livre/diasRest;
   const gHoje=soma(doM.filter(l=>l.tipo==='despesa'&&l.data===h&&!ids.has(l.id)&&!naCx(l)));
+  const rt=ritmoInfo(m);
+  // previsão: o que está livre menos o seu ritmo normal nos dias que faltam (hoje conta só o que ainda não gastou)
+  const gHojeNormal=soma(rt.pont.length?doM.filter(l=>l.data===h&&ehVariavel(l,ids)&&!ehPontual(l,rt.media)):doM.filter(l=>l.data===h&&ehVariavel(l,ids)));
+  const sobra=livre-rt.porDia*(diasRest-1)-Math.max(0,rt.porDia-gHojeNormal);
+  const acima=rt.esperado>0&&rt.gastoNormal>rt.esperado*1.15&&rt.gastoNormal-rt.esperado>=50;
   const semRenda=D.reserva&&D.reserva.tipo==='pct'&&D.reserva.v>0&&rendaMes(m)===0;
   const linhaRes=res>0?`<div class="mini" style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:center"><small>🐷 Guardado este mês</small><b class="pos" style="font-size:15px;margin:0">${R(guard)} de ${R(res)}</b></div>
       <div class="barra"><i style="width:${Math.min(100,guard/res*100)}%;background:var(--verde)"></i></div>
       ${guard>=res?'<small style="color:var(--verde)">✅ Meta de reserva do mês cumprida!</small>':D.contas.some(ehCx)?'':'<small>Crie uma caixinha em ⚙️ Mais → Contas para guardar.</small>'}</div>`
     :semRenda?`<small style="margin-top:8px">🐷 Reserva de ${String(D.reserva.v).replace('.',',')}% definida, mas ainda não há receitas lançadas neste mês.</small>`:'';
-  window._diario={zero:disp<0||livre<0,porDia,gHoje,reservaOk:res>0&&guard>=res};
+  window._diario={zero:disp<0||livre<0,porDia,gHoje,sobra,acima,reservaOk:res>0&&guard>=res};
   if(disp<0)return`<div class="card diario">${tit}
     <div class="grande neg">R$ 0,00</div><small>⚠️ ${base==='entradas'?`Você já comprometeu <b>${R(-disp)}</b> a mais do que entrou este mês. Está usando dinheiro de meses anteriores.`:`O saldo não cobre os compromissos do mês: faltam <b>${R(-disp)}</b>.`}${res>0?' Não sobra nada para a reserva este mês.':''}</small>${rodapeBase}</div>`;
   if(livre<0)return`<div class="card diario">${tit}
     <div class="grande neg">R$ 0,00</div><small>⚠️ Para completar a reserva (faltam ${R(falta)}), seriam necessários mais <b>${R(-livre)}</b>. Hoje sobram ${R(disp)}. Diminua os gastos ou ajuste a reserva.</small>${linhaRes}${rodapeBase}</div>`;
-  const p=porDia>0?gHoje/porDia*100:0,cor=p>=100?'var(--verm)':p>=75?'var(--amar)':'var(--verde)';
+  const txtRitmo=rt.porDia>0?`${R(rt.porDia)} por dia <small style="display:inline;font-size:11px">(${rt.fonte==='hist'?'média dos últimos meses':'média deste mês'})</small>`:'<small style="display:inline">ainda sem gastos do dia a dia</small>';
+  const pct=rt.esperado>0?rt.gastoNormal/rt.esperado*100:0,cor=pct>115?'var(--verm)':pct>95?'var(--amar)':'var(--verde)';
   return`<div class="card diario">${tit}
-    <div class="grande pos">${R(porDia)}</div>
-    <small>Para ${diasRest===1?'hoje, último dia do mês':'os próximos '+diasRest+' dias'}. ${expl}</small>
+    <div class="grande pos">${R(livre)}</div>
+    <small>${expl}</small>
+    <div class="grid2" style="margin-top:10px">
+      <div class="mini"><small>🚶 Seu ritmo normal</small><b style="font-size:15px">${txtRitmo}</b></div>
+      <div class="mini"><small>🐷 Deve sobrar no fim do mês</small><b class="${sobra<0?'neg':'pos'}" style="font-size:15px">${R(sobra)}</b></div>
+    </div>
+    ${rt.esperado>0?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-top:10px"><span>Dia a dia no mês</span><b>${R(rt.gastoNormal)} <span style="color:var(--mut);font-weight:500">· normal até hoje ${R(rt.esperado)}</span></b></div>
+    <div class="barra"><i style="width:${Math.min(100,pct)}%;background:${cor}"></i></div>`:''}
+    ${rt.pont.length?`<small style="margin-top:8px">⚡ ${rt.pont.length===1?'1 gasto pontual':rt.pont.length+' gastos pontuais'} fora do ritmo: ${rt.pont.slice(0,3).map(l=>esc(l.desc||l.cat)+' '+R(l.valor)).join(', ')}${rt.pont.length>3?'…':''}. Conta no mês, mas não vira "gasto de todo dia".</small>`:''}
     ${linhaRes}
-    <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:10px"><span>Gasto hoje</span><b>${R(gHoje)} de ${R(porDia)}</b></div>
-    <div class="barra"><i style="width:${Math.min(100,p)}%;background:${cor}"></i></div>${rodapeBase}</div>`;
+    <small style="margin-top:8px;opacity:.85">Se quiser dividir por igual: até ${R(porDia)}/dia ${diasRest===1?'(último dia)':'nos próximos '+diasRest+' dias'}.</small>${rodapeBase}</div>`;
 }
 function formReserva(){
   const rs=D.reserva||{tipo:'valor',v:0};let tipo=rs.v>0?rs.tipo:'valor';
   const m=hoje().slice(0,7),renda=rendaMes(m);
   let base=baseDiaria();
-  abrir(`<h2>📅 Ajustar cálculo diário</h2>
+  abrir(`<h2>💸 Ajustar "livre no mês"</h2>
    <label style="margin-top:0">Calcular com base em</label>
    <div class="tipos" id="tBase" style="grid-template-columns:1fr 1fr"><button data-b="entradas">📥 Entradas do mês</button><button data-b="saldo">💳 Saldo das contas</button></div>
    <small id="bInfo" style="color:var(--mut);font-size:12px;display:block;margin-top:6px"></small>
    <h2 style="margin-top:18px">🐷 Quanto quer guardar por mês?</h2>
-   <p style="color:var(--mut);font-size:13px;margin-bottom:6px">Esse valor sai do cálculo de "quanto posso gastar por dia", para você fechar o mês com ele guardado.</p>
+   <p style="color:var(--mut);font-size:13px;margin-bottom:6px">Esse valor sai do "livre no mês", para você fechar o mês com ele guardado.</p>
    <div class="tipos" id="tRes" style="grid-template-columns:1fr 1fr"><button data-k="valor">💵 Valor fixo</button><button data-k="pct">📊 % da renda</button></div>
    <label id="rLab"></label><input id="rVal" inputmode="decimal" value="${rs.v>0?String(rs.v).replace('.',','):''}">
    <small id="rInfo" style="color:var(--mut);font-size:12px;display:block;margin-top:6px"></small>
@@ -635,14 +675,15 @@ function dicas(m){
   const h=hoje(),mAtual=h.slice(0,7),atual=m===mAtual,passado=m<mAtual;
   const r=resumo(m),gc=gastoCat(m),ga=gastoCat(addMes(m,-1)),out=[];
   const ic=c=>icCat('despesa',c);
-  // 1. projeção do mês
+  // 1. projeção do mês (usa o ritmo normal, sem os gastos pontuais)
   if(atual&&(r.r>0||r.d>0)){
-    const ids=idsDeContas(),dia=+h.slice(8),rest=ultDia(m)-dia;
-    const varia=soma(doMes(m).filter(l=>l.tipo==='despesa'&&l.data<=h&&!ids.has(l.id)));
-    const media=varia/dia,pend=soma(pagarPrinc(m).filter(p=>!p.pago));
-    const prev=r.r-r.d-pend-media*rest;
-    out.push(prev>=0?`📈 No ritmo atual, você deve fechar o mês com <b class="pos">${R(prev)}</b> sobrando.`
-      :`⚠️ No ritmo atual, o mês deve fechar <b class="neg">${R(-prev)}</b> no vermelho. Seus gastos do dia a dia estão em ${R(media)} por dia.`);
+    const d=window._diario,rt=ritmoInfo(m);
+    const pt=rt.pont.length?` (ignorei ${rt.pont.length===1?'1 gasto pontual':rt.pont.length+' gastos pontuais'}: ${rt.pont.slice(0,2).map(l=>esc(l.desc||l.cat)+' '+R(l.valor)).join(', ')})`:'';
+    let prev;
+    if(d&&typeof d.sobra==='number'&&!d.zero)prev=d.sobra;
+    else{const pend=soma(pagarPrinc(m).filter(p=>!p.pago)),rest=ultDia(m)-(+h.slice(8));prev=r.r-r.d-pend-rt.porDia*rest}
+    out.push(prev>=0?`📈 No seu ritmo normal, você fecha o mês com <b class="pos">${R(prev)}</b> sobrando${pt}.`
+      :`⚠️ No seu ritmo normal (${R(rt.porDia)}/dia), o mês fecha <b class="neg">${R(-prev)}</b> no vermelho${pt}.`);
   }
   // 2. maior aumento
   let up=null;for(const c in gc){const a=ga[c]||0;if(a>=50&&gc[c]>a*1.2&&gc[c]-a>=30&&(!up||gc[c]-a>up.d))up={c,d:gc[c]-a,p:Math.round((gc[c]/a-1)*100),a}}
@@ -687,7 +728,7 @@ function cardGrupo(){
     <div class="linha" style="margin-top:10px"><button class="btn sec" style="padding:9px" onclick="formLanc(null,{tipo:'receita',grupo:'${gq}'})">🟢 + Entrada</button><button class="btn sec" style="padding:9px" onclick="formLanc(null,{tipo:'despesa',grupo:'${gq}'})">🔴 + Saída</button></div>
     <canvas id="barrasG" height="150" style="margin-top:12px"></canvas>
     <div class="legenda"><span><i style="background:var(--verde)"></i>Entradas</span><span><i style="background:var(--verm)"></i>Saídas</span><span>· últimos 6 meses</span></div>
-    <small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">${qt} lançamento(s) neste mês. Controle à parte: não entra no saldo, nos gráficos nem no "quanto posso gastar".</small></div>`;
+    <small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">${qt} lançamento(s) neste mês. Controle à parte: não entra no saldo, nos gráficos nem no "livre no mês".</small></div>`;
 }
 function formSaldoGrupo(g){
   const v=(D.gruposIni&&D.gruposIni[g])||0;
@@ -722,7 +763,7 @@ function tInicio(){
   ${prox.length?`<div class="alerta">⏰ Vence em até 5 dias: ${prox.map(p=>esc(p.desc)+' ('+dataBR(p.venc)+')').join(', ')}</div>`:''}
   ${orcAlerta.map(([c,v])=>{const st=statusOrc(mes,c,v);return`<div class="alerta" style="display:flex;gap:8px;align-items:center"><span style="flex:1">📊 ${esc(c)}: ${st.estourou?`passou ${R(st.g-v)} do orçamento (${R(st.g)} de ${R(v)})`:`já usou ${Math.round(st.p)}% do orçamento`}</span><button class="btnp" style="background:#78350f;color:#fde68a" onclick="dispensarAlerta('${esc(c)}')">Ok</button></div>`}).join('')}
   <div class="card">
-    <h3>Saldo total hoje <button class="olho" onclick="D.oculto=!D.oculto;salva();render()">${D.oculto?'🙈':'👁️'}</button></h3>
+    <h3>Saldo total hoje <button class="olho" title="${D.oculto?'Mostrar valores':'Ocultar valores'}" onclick="D.oculto=!D.oculto;salva();render()">${SVG(D.oculto?OLHO_F:OLHO)}</button></h3>
     <div class="grande ${st<0?'neg':''}">${R(st)}</div>
     ${temCx?`<div class="grid2" style="margin-top:10px"><div class="mini"><small>💳 Disponível</small><b>${R(saldoDisponivel(h))}</b></div><div class="mini"><small>🐷 Guardado em caixinhas</small><b class="pos">${R(saldoGuardado(h))}</b></div></div>`:''}
     <div class="grid2" style="margin-top:12px">
@@ -784,7 +825,7 @@ function tLanc(){
   ls.forEach(l=>{if(l.data!==dia){dia=l.data;html+=`<div style="color:var(--mut);font-size:12px;margin:10px 0 2px">${new Date(dia+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'})}</div>`}
     const t=l.tipo==='transf',on=selLanc&&selLanc.has(l.id);
     html+=`<div class="item ${on?'sel':''}" data-id="${l.id}">${selLanc?`<div class="selbox">${on?'✓':''}</div>`:''}<div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
-      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>`:''}</small></div>
+      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>`:''}${l.tipo==='despesa'&&!l.grupo&&ehPontual(l)?' <span class="tag pt">⚡ pontual</span>':''}</small></div>
       <div class="val ${l.tipo==='receita'?'pos':l.tipo==='despesa'?'neg':''}">${l.tipo==='despesa'?'-':l.tipo==='receita'?'+':''}${R(l.valor)}</div></div>`});
   const avisoOc=nOcultos?`<div class="vazio" style="padding:10px 0 2px;font-size:12px">🙈 ${nOcultos} lançamento(s) 📌 oculto(s) · <a onclick="D.ocultaSepLanc=false;salva();render()" style="color:var(--azul);cursor:pointer">mostrar</a></div>`:'';
   const topo=selLanc
@@ -1028,6 +1069,7 @@ function formLanc(id,pre){
        ${grupos().length?`<div class="chips" style="margin:8px 0 0">${grupos().map(g=>`<button type="button" class="chip" data-sg="${esc(g)}">${esc(g)}</button>`).join('')}</div>`:''}
      </div>
    </div>
+   <div id="bPont" class="check"><input type="checkbox" id="fpont"><span>⚡ Gasto pontual <small style="color:var(--mut)">(compra fora do normal, não entra no ritmo do dia a dia)</small> <span id="hintPont" style="color:var(--amar);font-size:12px"></span></span></div>
    ${!id?`<div class="check"><input type="checkbox" id="frep"><span>Repetir nos próximos meses</span></div>
    <div id="bQtd" class="oculto"><label>Quantas vezes no total (ex.: parcelas)</label><input id="fqtd" type="number" min="2" max="120" value="12"></div>`:''}
    <div class="linha">${id?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
@@ -1046,7 +1088,15 @@ function formLanc(id,pre){
     if(g){$('#fsep').checked=true;$('#fgrp').value=g}else{$('#fsep').checked=false}
     mostraSep();
   };
-  const atualiza=()=>{document.querySelectorAll('.tipos button').forEach(b=>b.classList.toggle('on',b.dataset.k===tipo));
+  let pontManual=!!id&&typeof l.pontual==='boolean';
+  const autoPont=()=>pontualAuto({tipo:'despesa',valor:num($('#fv').value)},mediaMensalVar(($('#fdt').value||hoje()).slice(0,7)));
+  const mostraPont=()=>{$('#bPont').classList.toggle('oculto',tipo!=='despesa');
+    if(!pontManual)$('#fpont').checked=autoPont();
+    $('#hintPont').textContent=!pontManual&&$('#fpont').checked?'⚡ detectado automático':''};
+  if(id&&typeof l.pontual==='boolean')$('#fpont').checked=l.pontual;
+  $('#fpont').onchange=()=>{pontManual=true;$('#hintPont').textContent=''};
+  $('#fv').addEventListener('input',mostraPont);$('#fdt').addEventListener('change',mostraPont);
+  const atualiza=()=>{document.querySelectorAll('.tipos button').forEach(b=>b.classList.toggle('on',b.dataset.k===tipo));mostraPont();
     $('#bCat').classList.toggle('oculto',tipo==='transf');$('#bDest').classList.toggle('oculto',tipo!=='transf');
     $('#lConta').textContent=tipo==='transf'?'Da conta':'Conta';
     if(tipo!=='transf'){$('#fc').innerHTML=optsCat(tipo,l.cat);sugerir()}
@@ -1074,7 +1124,9 @@ function formLanc(id,pre){
     const base={tipo,valor:v,desc:$('#fd').value.trim(),cat:tipo==='transf'?'':$('#fc').value,conta:$('#fa').value,data:$('#fdt').value||hoje()};
     if(tipo==='transf')base.dest=$('#fdst').value;
     if(grpFinal)base.grupo=grpFinal;
-    if(id){Object.assign(l,base);if(tipo!=='transf')delete l.dest;if(!grpFinal)delete l.grupo}
+    // só grava quando você escolhe diferente do automático
+    if(tipo==='despesa'&&pontManual&&$('#fpont').checked!==autoPont())base.pontual=$('#fpont').checked;
+    if(id){Object.assign(l,base);if(tipo!=='transf')delete l.dest;if(!grpFinal)delete l.grupo;if(!('pontual' in base))delete l.pontual}
     else{const n=$('#frep')?.checked?Math.max(2,Math.min(120,+$('#fqtd').value||2)):1;
       for(let i=0;i<n;i++){const[y,m,d]=base.data.split('-');const mm=addMes(y+'-'+m,i);
         D.lancs.push({...base,id:uid()+i,data:mm+'-'+String(Math.min(+d,ultDia(mm))).padStart(2,'0'),desc:n>1?(base.desc||base.cat)+' '+(i+1)+'/'+n:base.desc})}}
