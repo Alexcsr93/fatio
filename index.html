@@ -190,7 +190,7 @@ canvas{max-width:100%}
 </div>
 <script>
 // ================== DADOS ==================
-const VERSAO='1.8.0';
+const VERSAO='1.8.1';
 const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
@@ -258,9 +258,12 @@ function toastAcao(msg,bts,ms=7000){
 }
 function addDias(d,n){const x=new Date(d+'T12:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)}
 // saldo até uma data (lançamentos futuros só contam quando a data chegar)
+// lançamento 📌: por padrão fica totalmente apartado; opcionalmente pode afetar o saldo principal
+const sepAfeta=l=>!!(l&&l.grupo&&l.afetaSaldo===true);
+const sepForaSaldo=l=>!!(l&&l.grupo&&!sepAfeta(l));
 function saldoConta(id,ate){
   const c=conta(id);let s=c?c.saldoIni:0;
-  D.lancs.forEach(l=>{if(ate&&l.data>ate)return;if(l.grupo)return; // separados têm saldo próprio
+  D.lancs.forEach(l=>{if(ate&&l.data>ate)return;if(sepForaSaldo(l))return; // 📌 pode ou não sensibilizar saldo principal
     if(l.tipo==='receita'&&l.conta===id)s+=l.valor;
     if(l.tipo==='despesa'&&l.conta===id)s-=l.valor;
     if(l.tipo==='transf'){if(l.conta===id)s-=l.valor;if(l.dest===id)s+=l.valor}});
@@ -493,6 +496,7 @@ function parseRapido(txt){
 // ==== FIM PARSER ====
 // grupo usado da última vez para a mesma descrição (para marcar automático)
 function grupoDaDesc(desc){const n=limpaTxt(desc);if(!n)return null;const l=[...D.lancs].reverse().find(x=>x.grupo&&limpaTxt(x.desc)===n);return l?l.grupo:null}
+function afetaDaDesc(desc){const n=limpaTxt(desc);if(!n)return false;const l=[...D.lancs].reverse().find(x=>x.grupo&&limpaTxt(x.desc)===n);return!!(l&&l.afetaSaldo)}
 // ================== LANÇAMENTO RÁPIDO (texto e voz) ==================
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let rec=null;
@@ -512,7 +516,7 @@ function lancarRapido(txt){
   const p=parseRapido(txt);
   if(!(p.valor>0)){formLanc(null,p);toast('Não achei o valor. Complete aqui');return}
   const l={id:uid(),tipo:p.tipo,valor:p.valor,desc:p.desc,cat:p.cat,conta:p.conta||principais()[0]?.id,data:p.data};
-  const g=grupoDaDesc(p.desc);if(g)l.grupo=g; // mesma descrição de antes → mesmo gráfico separado
+  const g=grupoDaDesc(p.desc);if(g){l.grupo=g;if(afetaDaDesc(p.desc))l.afetaSaldo=true} // mesma descrição de antes → mesmo gráfico separado
   D.lancs.push(l);salva();render();
   const c=conta(l.conta);
   toastAcao(`✅ ${l.tipo==='receita'?'Receita':'Despesa'} · ${l.desc||l.cat} · ${R(l.valor)}${c?' · '+c.nome:''}${l.grupo?' · 📌 '+l.grupo:''}${l.data!==hoje()?' · '+dataBR(l.data):''}`,
@@ -767,7 +771,7 @@ function cardGrupo(){
     <div class="linha" style="margin-top:10px"><button class="btn sec" style="padding:9px" onclick="formLanc(null,{tipo:'receita',grupo:'${gq}'})">🟢 + Entrada</button><button class="btn sec" style="padding:9px" onclick="formLanc(null,{tipo:'despesa',grupo:'${gq}'})">🔴 + Saída</button></div>
     <canvas id="barrasG" height="150" style="margin-top:12px"></canvas>
     <div class="legenda"><span><i style="background:var(--verde)"></i>Entradas</span><span><i style="background:var(--verm)"></i>Saídas</span><span>· últimos 6 meses</span></div>
-    <small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">${qt} lançamento(s) neste mês. Controle à parte: não entra no saldo, nos gráficos nem no "livre no mês".</small></div>`;
+    <small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">${qt} lançamento(s) neste mês. Continua fora dos gráficos e do “livre no mês”. Os itens marcados como “afetar saldo principal” também movimentam a conta escolhida.</small></div>`;
 }
 function formSaldoGrupo(g){
   const v=(D.gruposIni&&D.gruposIni[g])||0;
@@ -820,7 +824,7 @@ function tInicio(){
   <div class="card"><h3>Minhas contas</h3>${listaContas(false)}</div>
   <div class="card"><h3>Gastos por categoria</h3>
     ${cats.length?`<canvas id="pizza" height="180"></canvas><div class="legenda" id="leg"></div>`:'<div class="vazio">Nenhuma despesa neste mês</div>'}
-    ${temSep?'<small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">📌 Lançamentos separados não entram aqui nem no saldo</small>':''}
+    ${temSep?'<small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">📌 Lançamentos separados não entram neste gráfico; cada item pode ou não afetar o saldo</small>':''}
   </div>
   ${cg}
   <div class="card"><h3>Últimos 6 meses</h3><canvas id="barras" height="170"></canvas>
@@ -866,7 +870,7 @@ function tLanc(){
   ls.forEach(l=>{if(l.data!==dia){dia=l.data;html+=`<div style="color:var(--mut);font-size:12px;margin:10px 0 2px">${new Date(dia+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'})}</div>`}
     const t=l.tipo==='transf',on=selLanc&&selLanc.has(l.id);
     html+=`<div class="item ${on?'sel':''}" data-id="${l.id}">${selLanc?`<div class="selbox">${on?'✓':''}</div>`:''}<div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
-      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>`:''}${l.tipo==='despesa'&&!l.grupo&&ehPontual(l)?' <span class="tag pt">⚡ pontual</span>':''}</small></div>
+      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>${sepAfeta(l)?' <span class="tag" style="background:#14532d55;color:var(--verde)">↕ saldo</span>':''}`:''}${l.tipo==='despesa'&&!l.grupo&&ehPontual(l)?' <span class="tag pt">⚡ pontual</span>':''}</small></div>
       <div class="val ${l.tipo==='receita'?'pos':l.tipo==='despesa'?'neg':''}">${l.tipo==='despesa'?'-':l.tipo==='receita'?'+':''}${R(l.valor)}</div></div>`});
   const avisoOc=nOcultos?`<div class="vazio" style="padding:10px 0 2px;font-size:12px">🙈 ${nOcultos} lançamento(s) 📌 oculto(s) · <a onclick="D.ocultaSepLanc=false;salva();render()" style="color:var(--azul);cursor:pointer">mostrar</a></div>`:'';
   const topo=selLanc
@@ -908,19 +912,20 @@ function ligaBarraSel(){
     D.pagar.forEach(p=>{for(const k in p.pagos||{})if(ids.has(p.pagos[k]))delete p.pagos[k]});
     D.receber.forEach(p=>{for(const k in p.recebidos||{})if(ids.has(p.recebidos[k]))delete p.recebidos[k]});
     selLanc=null;salva();render();toast(`🗑️ ${n} lançamento(s) excluído(s)`)};
-  $('#sTira').onclick=()=>{if(!precisa())return;let n=0;selecionados().forEach(l=>{if(l.grupo){delete l.grupo;n++}});
+  $('#sTira').onclick=()=>{if(!precisa())return;let n=0;selecionados().forEach(l=>{if(l.grupo){delete l.grupo;delete l.afetaSaldo;n++}});
     selLanc=null;salva();render();toast(n?`↩️ ${n} voltaram para o saldo principal`:'Nenhum selecionado estava separado')};
   $('#sGrp').onclick=()=>{if(!precisa())return;
     const sl=selecionados().filter(l=>l.tipo!=='transf');if(!sl.length)return toast('Transferências não podem ser separadas');
     abrir(`<h2>📌 Separar ${sl.length} lançamento(s)</h2>
-     <p style="color:var(--mut);font-size:13px">Saem do saldo e do gráfico principal e vão para o saldo do grupo.${sl.length<selLanc.size?' Transferências selecionadas serão ignoradas.':''}</p>
+     <p style="color:var(--mut);font-size:13px">Saem dos gráficos principais e vão para o gráfico do grupo.${sl.length<selLanc.size?' Transferências selecionadas serão ignoradas.':''}</p>
+     <div class="check"><input type="checkbox" id="sgSaldo"><span>↕ Sensibilizar também o saldo principal</span></div>
      <label>Nome do grupo</label><input id="sgN" list="lGrpS" value="${esc(grupoAtual()||'')}" placeholder="Ex.: Gasolina" maxlength="30" autocomplete="off">
      <datalist id="lGrpS">${grupos().map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
      ${grupos().length?`<div class="chips" style="margin:8px 0 0">${grupos().map(g=>`<button type="button" class="chip" data-sg="${esc(g)}">${esc(g)}</button>`).join('')}</div>`:''}
      <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Separar</button></div>`);
     document.querySelectorAll('[data-sg]').forEach(b=>b.onclick=()=>$('#sgN').value=b.dataset.sg);
     $('#ok').onclick=()=>{let g=$('#sgN').value.trim().replace(/\s+/g,' ');if(!g)return alert('Dê um nome ao grupo');
-      g=grupos().find(x=>semAcento(x)===semAcento(g))||g;sl.forEach(l=>l.grupo=g);D.grupoSel=g;selLanc=null;salva();fechar();toast(`📌 ${sl.length} lançamento(s) em ${g}`)}};
+      g=grupos().find(x=>semAcento(x)===semAcento(g))||g;sl.forEach(l=>{l.grupo=g;if($('#sgSaldo').checked)l.afetaSaldo=true;else delete l.afetaSaldo});D.grupoSel=g;selLanc=null;salva();fechar();toast(`📌 ${sl.length} lançamento(s) em ${g}`)}};
   $('#sCat').onclick=()=>{if(!precisa())return;
     const sl=selecionados().filter(l=>l.tipo!=='transf'),tipos=[...new Set(sl.map(l=>l.tipo))];
     if(!sl.length)return toast('Transferências não têm categoria');
@@ -949,7 +954,7 @@ function pagar(id){
     <label>Data do pagamento</label><input id="pd" type="date" value="${hoje().slice(0,7)===mes?hoje():inst.venc}">
     <label>Pagou com</label><select id="pc">${optsConta()}</select>
     <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Confirmar</button></div>`);
-  $('#ok').onclick=()=>{const l={id:uid(),tipo:'despesa',valor:num($('#pv').value),desc:p.desc,cat:p.cat,conta:$('#pc').value,data:$('#pd').value||hoje()};if(p.grupo)l.grupo=p.grupo;
+  $('#ok').onclick=()=>{const l={id:uid(),tipo:'despesa',valor:num($('#pv').value),desc:p.desc,cat:p.cat,conta:$('#pc').value,data:$('#pd').value||hoje()};if(p.grupo){l.grupo=p.grupo;if(p.afetaSaldo)l.afetaSaldo=true}
     D.lancs.push(l);p.pagos[mes]=l.id;salva();fechar();toast('✅ Conta paga!')};
 }
 function tReceber(){
@@ -972,7 +977,7 @@ function receberEntrada(id){
     <label>Data real do recebimento</label><input id="rd" type="date" value="${hoje().slice(0,7)===mes?hoje():inst.prev}">
     <label>Entrou em</label><select id="rc">${optsConta()}</select>
     <div class="linha"><button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Confirmar</button></div>`);
-  $('#ok').onclick=()=>{const l={id:uid(),tipo:'receita',valor:num($('#rv').value),desc:p.desc,cat:p.cat,conta:$('#rc').value,data:$('#rd').value||hoje()};if(p.grupo)l.grupo=p.grupo;
+  $('#ok').onclick=()=>{const l={id:uid(),tipo:'receita',valor:num($('#rv').value),desc:p.desc,cat:p.cat,conta:$('#rc').value,data:$('#rd').value||hoje()};if(p.grupo){l.grupo=p.grupo;if(p.afetaSaldo)l.afetaSaldo=true}
     D.lancs.push(l);p.recebidos[mes]=l.id;salva();fechar();toast('💰 Recebimento lançado!')};
 }
 function formReceber(id){
@@ -984,7 +989,7 @@ function formReceber(id){
    <div class="check"><input type="checkbox" id="rrec" ${p.rec?'checked':''}><span>🔁 Entrada fixa (todo mês)</span></div>
    <div id="rRec"><label>Dia previsto</label><input id="rdia" type="number" min="1" max="31" value="${p.dia||5}"></div>
    <div id="rUni"><label>Data prevista</label><input id="rdt" type="date" value="${p.data||hoje()}"></div>
-   ${htmlSep(p.grupo)}
+   ${htmlSep(p.grupo,p.afetaSaldo)}
    <div class="linha">${id?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
   const muda=()=>{$('#rRec').classList.toggle('oculto',!$('#rrec').checked);$('#rUni').classList.toggle('oculto',$('#rrec').checked)};$('#rrec').onchange=muda;muda();ligaSep();
   if(!id)$('#rdsc').oninput=()=>{const sc=sugereCat($('#rdsc').value,'receita');if(sc)$('#rcat').value=sc};
@@ -992,7 +997,7 @@ function formReceber(id){
     if(p.rec&&confirm('Parar a previsão a partir deste mês? (OK = mantém o histórico anterior)'))p.fim=addMes(mes,-1);else D.receber=D.receber.filter(x=>x.id!==id);salva();fechar()};
   $('#ok').onclick=()=>{const v=num($('#rval').value),d=$('#rdsc').value.trim();if(!d||v<=0)return alert('Preencha descrição e valor');
     const g=lerSep();if(g===false)return alert('Dê um nome ao grupo');
-    const o={grupo:g||undefined,desc:d,valor:v,cat:$('#rcat').value,rec:$('#rrec').checked,dia:Math.max(1,Math.min(31,+$('#rdia').value||1)),data:$('#rdt').value||hoje()};
+    const o={grupo:g?.grupo||undefined,afetaSaldo:g?.afeta||undefined,desc:d,valor:v,cat:$('#rcat').value,rec:$('#rrec').checked,dia:Math.max(1,Math.min(31,+$('#rdia').value||1)),data:$('#rdt').value||hoje()};
     if(id)Object.assign(p,o);else D.receber.push({...o,id:uid(),inicio:mes,recebidos:{}});salva();fechar();toast('💰 Entrada prevista salva')};
 }
 function tPlanos(){
@@ -1050,7 +1055,7 @@ function tMais(){
   <div class="card"><h3>📌 Gráfico separado</h3>
     <div class="check" style="margin-top:0"><input type="checkbox" id="optGE" ${grafExtraOn()?'checked':''}><span>Mostrar na tela inicial</span></div>
     <div class="check"><input type="checkbox" id="optOL" ${ocultaSepLanc()?'checked':''}><span>Ocultar transações 📌 na lista de Lançamentos</span></div>
-    <p style="color:var(--mut);font-size:12px;margin-top:8px">${gs.length?'':'Nenhum grupo ainda. Ao lançar, marque “📌 Separar do saldo e do gráfico principal” e dê um nome.'} Esses lançamentos têm saldo e gráfico próprios e não afetam o saldo das contas.</p>
+    <p style="color:var(--mut);font-size:12px;margin-top:8px">${gs.length?'':'Nenhum grupo ainda. Ao lançar, marque “📌 Separar do saldo e do gráfico principal” e dê um nome.'} Esses lançamentos sempre têm gráfico próprio. Em cada lançamento você escolhe se também deve movimentar o saldo principal.</p>
     ${gs.map(g=>`<div class="item" onclick="formSaldoGrupo('${esc(g).replace(/'/g,"\\'")}')"><div class="ic">📌</div><div class="info"><b>${esc(g)}</b><small>Toque para ajustar o saldo inicial</small></div><div class="val ${saldoGrupo(g,h)<0?'neg':''}">${R(saldoGrupo(g,h))}</div></div>`).join('')}
   </div>
   ${cardLembretes()}
@@ -1081,7 +1086,7 @@ function tMais(){
 }
 function baixar(nome,txt,tipo){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:tipo}));a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function exportar(){D.ultBackup=Date.now();salva();baixar('backup-fatio-'+hoje()+'.json',JSON.stringify(D),'application/json');render()}
-function exportarCSV(){const l=[['Data','Tipo','Descrição','Categoria','Conta','Valor','Grupo separado']].concat([...D.lancs].sort((a,b)=>a.data.localeCompare(b.data)).map(x=>[x.data.split('-').reverse().join('/'),x.tipo,x.desc||'',x.cat||'',x.tipo==='transf'?nomeConta(x.conta)+' → '+nomeConta(x.dest):nomeConta(x.conta),String(x.tipo==='despesa'?-x.valor:x.valor).replace('.',','),x.grupo||'']));
+function exportarCSV(){const l=[['Data','Tipo','Descrição','Categoria','Conta','Valor','Grupo separado','Afeta saldo principal']].concat([...D.lancs].sort((a,b)=>a.data.localeCompare(b.data)).map(x=>[x.data.split('-').reverse().join('/'),x.tipo,x.desc||'',x.cat||'',x.tipo==='transf'?nomeConta(x.conta)+' → '+nomeConta(x.dest):nomeConta(x.conta),String(x.tipo==='despesa'?-x.valor:x.valor).replace('.',','),x.grupo||'',x.grupo?(x.afetaSaldo?'Sim':'Não'):'']));
   baixar('fatio-lancamentos-'+hoje()+'.csv','\ufeff'+l.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n'),'text/csv')}
 function importar(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const n=JSON.parse(r.result);
   if(!n.lancs||!n.contas)throw 0;if(confirm('Substituir os dados atuais pelo backup?')){const u=D.sincUid;D=n;norm();D.sincUid=u;salva();toast('✅ Backup restaurado');render()}}catch(_){alert('Arquivo de backup inválido')}};r.readAsText(f);e.target.value=''}
@@ -1105,11 +1110,13 @@ function formLanc(id,pre){
    <div id="bDest"><label>Para a conta</label><select id="fdst">${optsConta(l.dest||principais()[1]?.id)}</select></div>
    <label>Data</label><input id="fdt" type="date" value="${l.data}">
    <div id="bSep" class="caixaSep">
-     <div class="check"><input type="checkbox" id="fsep" ${l.grupo?'checked':''}><span>📌 Separar do saldo e do gráfico principal</span></div>
+     <div class="check"><input type="checkbox" id="fsep" ${l.grupo?'checked':''}><span>📌 Separar dos gráficos principais</span></div>
      <div id="bSepN" class="oculto"><label>Nome do grupo (ganha saldo e gráfico só dele)</label>
        <input id="fgrp" list="lGrp" placeholder="Ex.: Gasolina, Corridas, Larissa" value="${esc(l.grupo||'')}" maxlength="30" autocomplete="off">
        <datalist id="lGrp">${grupos().map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
        ${grupos().length?`<div class="chips" style="margin:8px 0 0">${grupos().map(g=>`<button type="button" class="chip" data-sg="${esc(g)}">${esc(g)}</button>`).join('')}</div>`:''}
+       <div class="check"><input type="checkbox" id="fafeta" ${l.afetaSaldo?'checked':''}><span>↕ Sensibilizar o saldo principal</span></div>
+       <small style="color:var(--mut);font-size:12px;display:block;margin-top:4px">Marcado: também altera o saldo da conta selecionada. Desmarcado: fica 100% apartado.</small>
      </div>
    </div>
    <div id="bPont" class="check"><input type="checkbox" id="fpont"><span>⚡ Gasto pontual <small style="color:var(--mut)">(compra fora do normal, não entra no ritmo do dia a dia)</small> <span id="hintPont" style="color:var(--amar);font-size:12px"></span></span></div>
@@ -1166,20 +1173,22 @@ function formLanc(id,pre){
     const grpFinal=sep?(grupos().find(g=>semAcento(g)===semAcento(grp))||grp):null;
     const base={tipo,valor:v,desc:$('#fd').value.trim(),cat:tipo==='transf'?'':$('#fc').value,conta:$('#fa').value,data:$('#fdt').value||hoje()};
     if(tipo==='transf')base.dest=$('#fdst').value;
-    if(grpFinal)base.grupo=grpFinal;
+    if(grpFinal){base.grupo=grpFinal;if($('#fafeta').checked)base.afetaSaldo=true}
     // só grava quando você escolhe diferente do automático
     if(tipo==='despesa'&&pontManual&&$('#fpont').checked!==autoPont())base.pontual=$('#fpont').checked;
-    if(id){Object.assign(l,base);if(tipo!=='transf')delete l.dest;if(!grpFinal)delete l.grupo;if(!('pontual' in base))delete l.pontual}
+    if(id){Object.assign(l,base);if(tipo!=='transf')delete l.dest;if(!grpFinal){delete l.grupo;delete l.afetaSaldo}else if(!base.afetaSaldo)delete l.afetaSaldo;if(!('pontual' in base))delete l.pontual}
     else{const n=$('#frep')?.checked?Math.max(2,Math.min(120,+$('#fqtd').value||2)):1;
       for(let i=0;i<n;i++){const[y,m,d]=base.data.split('-');const mm=addMes(y+'-'+m,i);
         D.lancs.push({...base,id:uid()+i,data:mm+'-'+String(Math.min(+d,ultDia(mm))).padStart(2,'0'),desc:n>1?(base.desc||base.cat)+' '+(i+1)+'/'+n:base.desc})}}
     if(grpFinal)D.grupoSel=grpFinal;
     salva();fechar();toast(grpFinal?'✅ Salvo · 📌 '+grpFinal:'✅ Salvo')};
 }
-const htmlSep=g=>`<div class="caixaSep"><div class="check"><input type="checkbox" id="xsep" ${g?'checked':''}><span>📌 Separar do saldo e do gráfico principal</span></div>
-  <div id="xsepN" class="${g?'':'oculto'}"><label>Nome do grupo</label><input id="xgrp" list="lGrpX" value="${esc(g||'')}" placeholder="Ex.: Gasolina" maxlength="30" autocomplete="off"><datalist id="lGrpX">${grupos().map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div></div>`;
+const htmlSep=(g,afeta)=>`<div class="caixaSep"><div class="check"><input type="checkbox" id="xsep" ${g?'checked':''}><span>📌 Separar dos gráficos principais</span></div>
+  <div id="xsepN" class="${g?'':'oculto'}"><label>Nome do grupo</label><input id="xgrp" list="lGrpX" value="${esc(g||'')}" placeholder="Ex.: Gasolina" maxlength="30" autocomplete="off"><datalist id="lGrpX">${grupos().map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+    <div class="check"><input type="checkbox" id="xafeta" ${afeta?'checked':''}><span>↕ Sensibilizar o saldo principal</span></div>
+    <small style="color:var(--mut);font-size:12px;display:block;margin-top:4px">Marcado: a entrada/saída também altera a conta escolhida. Desmarcado: fica 100% apartada.</small></div></div>`;
 function ligaSep(){$('#xsep').onchange=()=>{$('#xsepN').classList.toggle('oculto',!$('#xsep').checked);if($('#xsep').checked&&!$('#xgrp').value)$('#xgrp').value=grupoAtual()||''}}
-function lerSep(){if(!$('#xsep').checked)return null;const g=$('#xgrp').value.trim().replace(/\s+/g,' ');if(!g)return false;return grupos().find(x=>semAcento(x)===semAcento(g))||g}
+function lerSep(){if(!$('#xsep').checked)return null;const g=$('#xgrp').value.trim().replace(/\s+/g,' ');if(!g)return false;return{grupo:grupos().find(x=>semAcento(x)===semAcento(g))||g,afeta:!!$('#xafeta').checked}}
 function formPagar(id){
   const p=id?D.pagar.find(x=>x.id===id):{desc:'',valor:'',cat:'Contas/Serviços',rec:true,dia:10,data:hoje(),inicio:mes};
   abrir(`<h2>${id?'Editar':'Nova'} conta a pagar</h2>
@@ -1189,7 +1198,7 @@ function formPagar(id){
    <div class="check"><input type="checkbox" id="pr" ${p.rec?'checked':''}><span>🔁 Conta fixa (todo mês)</span></div>
    <div id="bRec"><label>Dia do vencimento</label><input id="pdia" type="number" min="1" max="31" value="${p.dia||10}"></div>
    <div id="bUni"><label>Data do vencimento</label><input id="pdt" type="date" value="${p.data||hoje()}"></div>
-   ${htmlSep(p.grupo)}
+   ${htmlSep(p.grupo,p.afetaSaldo)}
    <div class="linha">${id?'<button class="btn perigo" id="del" style="width:auto">🗑️</button>':''}<button class="btn sec" onclick="fechar()">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
   const t=()=>{$('#bRec').classList.toggle('oculto',!$('#pr').checked);$('#bUni').classList.toggle('oculto',$('#pr').checked)};$('#pr').onchange=t;t();ligaSep();
   if(!id)$('#pd').oninput=()=>{const s=sugereCat($('#pd').value,'despesa');if(s)$('#pc').value=s};
@@ -1197,7 +1206,7 @@ function formPagar(id){
     if(p.rec&&confirm('Parar de cobrar a partir deste mês? (OK = mantém o histórico dos meses anteriores)'))p.fim=addMes(mes,-1);else D.pagar=D.pagar.filter(x=>x.id!==id);salva();fechar()};
   $('#ok').onclick=()=>{const v=num($('#pv').value),d=$('#pd').value.trim();if(!d||v<=0)return alert('Preencha descrição e valor');
     const g=lerSep();if(g===false)return alert('Dê um nome ao grupo');
-    const o={grupo:g||undefined,desc:d,valor:v,cat:$('#pc').value,rec:$('#pr').checked,dia:Math.max(1,Math.min(31,+$('#pdia').value||1)),data:$('#pdt').value||hoje()};
+    const o={grupo:g?.grupo||undefined,afetaSaldo:g?.afeta||undefined,desc:d,valor:v,cat:$('#pc').value,rec:$('#pr').checked,dia:Math.max(1,Math.min(31,+$('#pdia').value||1)),data:$('#pdt').value||hoje()};
     if(id)Object.assign(p,o);else D.pagar.push({...o,id:uid(),inicio:mes,pagos:{}});salva();fechar();toast('✅ Salvo')};
 }
 function formMeta(id){
