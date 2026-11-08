@@ -1,5 +1,5 @@
 // Fatiô – service worker: app funciona offline. Login/sincronização vão direto para a rede.
-const CACHE='fatio-v12';
+const CACHE='fatio-v13';
 const ARQS=['./','./index.html','./manifest.json','./config.js','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./icon-180.png','./icon-despesa.png','./icon-receita.png','./privacidade.html'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>Promise.all(ARQS.map(a=>c.add(a).catch(()=>{})))));self.skipWaiting()});
 // apaga caches antigos, mas mantém 'fatio-dados' (agenda dos lembretes)

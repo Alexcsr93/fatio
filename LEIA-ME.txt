@@ -1,17 +1,8 @@
-FATIÔ v1.8.0 – O QUE ENVIAR PARA O GITHUB (repositório "fatio")
+FATIÔ v1.9.0 – O QUE ENVIAR PARA O GITHUB (repositório "fatio")
 ===============================================================
 Envie estes 2 arquivos (substituem os antigos):
   index.html, sw.js
-Se ainda não subiu a v1.7.0, envie também os ícones azuis:
-  icon-180.png, icon-192.png, icon-512.png, icon-maskable-512.png
-NÃO apague: config.js, manifest.json, privacidade.html, excluir-conta.html,
-icon-despesa.png, icon-receita.png.
-
+Esta versão já inclui a v1.8.1 (📌 sensibilizar saldo principal).
+NÃO apague: config.js, manifest.json, privacidade.html, excluir-conta.html e os ícones.
 Depois do commit, espere o ✅ verde em Actions.
 No celular: feche e abra o app 2 vezes para pegar a versão nova.
-
--------------------------------------------------------------
-ACRESCENTE NA privacidade.html (depois da seção 3.1):
--------------------------------------------------------------
-<h2>3.2 Lembretes</h2>
-<p>Os lembretes de contas são opcionais e gerados no seu próprio aparelho. Para avisar com o app fechado, uma lista das contas a vencer (descrição, valor e data) fica guardada apenas no armazenamento local do aparelho. Nenhum dado é enviado a servidores de notificação.</p>

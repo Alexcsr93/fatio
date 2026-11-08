@@ -190,7 +190,7 @@ canvas{max-width:100%}
 </div>
 <script>
 // ================== DADOS ==================
-const VERSAO='1.8.1';
+const VERSAO='1.9.0';
 const CHAVE='minhasFinancas_v1'; // mantida para preservar dados já salvos
 const CATS={
  despesa:{'Moradia':'🏠','Alimentação':'🍽️','Mercado':'🛒','Transporte':'🚗','Saúde':'💊','Educação':'📚','Lazer':'🎉','Filhos':'🧸','Contas/Serviços':'💡','Cartão':'💳','Empréstimo':'🏦','Roupas':'👕','Assinaturas':'📺','Pets':'🐶','Presentes':'🎁','Impostos':'🧾','Outros':'📦'},
@@ -350,7 +350,7 @@ function guardadoNoMes(m){
   return Math.round(g*100)/100;
 }
 const doMesTudo=m=>D.lancs.filter(l=>l.data.slice(0,7)===m);
-const doMes=m=>doMesTudo(m).filter(l=>!l.grupo); // fora os separados (📌)
+const doMes=m=>doMesTudo(m).filter(l=>!l.grupo&&!l.ajuste); // fora os separados (📌) e os ajustes de saldo
 function resumo(m){let r=0,d=0;doMes(m).forEach(l=>{if(l.tipo==='receita')r+=l.valor;if(l.tipo==='despesa')d+=l.valor});return{r,d,s:r-d}}
 function gastoCat(m){const o={};doMes(m).filter(l=>l.tipo==='despesa').forEach(l=>o[l.cat]=(o[l.cat]||0)+l.valor);return o}
 // ---- Gráfico separado: transações marcadas com "📌 Separar do gráfico principal" ----
@@ -517,6 +517,7 @@ function lancarRapido(txt){
   if(!(p.valor>0)){formLanc(null,p);toast('Não achei o valor. Complete aqui');return}
   const l={id:uid(),tipo:p.tipo,valor:p.valor,desc:p.desc,cat:p.cat,conta:p.conta||principais()[0]?.id,data:p.data};
   const g=grupoDaDesc(p.desc);if(g){l.grupo=g;if(afetaDaDesc(p.desc))l.afetaSaldo=true} // mesma descrição de antes → mesmo gráfico separado
+  if(!confirmaDuplicado(l))return toast('Lançamento cancelado');
   D.lancs.push(l);salva();render();
   const c=conta(l.conta);
   toastAcao(`✅ ${l.tipo==='receita'?'Receita':'Despesa'} · ${l.desc||l.cat} · ${R(l.valor)}${c?' · '+c.nome:''}${l.grupo?' · 📌 '+l.grupo:''}${l.data!==hoje()?' · '+dataBR(l.data):''}`,
@@ -749,9 +750,120 @@ function dicas(m){
     out.push(`🎯 Para chegar em "${esc(mt.nome)}" até ${String(pm).padStart(2,'0')}/${py}, guarde ${R((mt.alvo-mt.atual)/meses)} por mês.`)}
   return out.slice(0,4);
 }
+
+// ================== v1.9: CONFERIR SALDO · BUSCA · FECHAMENTO · DUPLICADOS ==================
+const nomeMesLongo=m=>{const t=new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1)};
+// ---- 5. aviso de duplicado ----
+function achaDuplicado(l){
+  const d=limpaTxt(l.desc||l.cat);
+  return D.lancs.find(x=>x.id!==l.id&&x.tipo===l.tipo&&Math.abs(x.valor-l.valor)<0.005&&x.data===l.data&&x.conta===l.conta&&limpaTxt(x.desc||x.cat)===d);
+}
+function confirmaDuplicado(l){
+  const x=achaDuplicado(l);if(!x)return true;
+  return confirm(`⚠️ Possível lançamento duplicado\n\nJá existe "${x.desc||x.cat}" de ${R(x.valor)} em ${dataBR(x.data)} na conta ${nomeConta(x.conta)}.\n\nLançar mesmo assim?`);
+}
+// ---- 1. conferir saldo com o banco ----
+function conferirSaldo(idSel){
+  const ops=principais().filter(c=>!ehCartao(c)).map(c=>[c,...caixinhas(c.id)]).flat();
+  if(!ops.length)return toast('Cadastre uma conta primeiro');
+  const id0=idSel||ops[0].id;
+  abrir(`<h2>🔄 Conferir saldo com o banco</h2>
+   <p style="color:var(--mut);font-size:13px">Digite o saldo que aparece agora no app do banco. O Fatiô mostra a diferença e corrige pra você.</p>
+   <label>Conta</label><select id="cfC">${ops.map(c=>`<option value="${c.id}" ${c.id===id0?'selected':''}>${c.pai?'↳ '+esc(nomeConta(c.id)):esc(c.nome)}</option>`).join('')}</select>
+   <div class="mini" style="margin-top:10px"><small>Saldo no Fatiô hoje</small><b id="cfApp"></b><small id="cfUlt"></small></div>
+   <label>Saldo no app do banco (R$)</label><input id="cfB" inputmode="decimal" placeholder="0,00">
+   <small style="color:var(--mut);font-size:12px;display:block;margin-top:4px">Use o saldo disponível, sem o dinheiro das caixinhas. Para saldo negativo, comece com "-".</small>
+   <div id="cfRes" style="margin-top:12px"></div>
+   <div class="linha"><button class="btn sec" onclick="fechar()">Fechar</button></div>`);
+  const calc=()=>{
+    const id=$('#cfC').value,c=conta(id),app=saldoConta(id,hoje());
+    $('#cfApp').textContent=R(app);
+    $('#cfUlt').textContent=c.conferidoEm?' · conferido em '+dataBR(c.conferidoEm):'';
+    const t=$('#cfB').value.trim();
+    if(!t){$('#cfRes').innerHTML='';return}
+    const banco=(t.startsWith('-')?-1:1)*num(t.replace('-','')),dif=Math.round((banco-app)*100)/100;
+    if(Math.abs(dif)<0.005){$('#cfRes').innerHTML=`<div class="mini" style="color:var(--verde)"><b style="color:var(--verde)">✅ Bateu certinho!</b></div><button class="btn" style="margin-top:8px" id="cfOk">Marcar como conferido</button>`;
+      $('#cfOk').onclick=()=>{c.conferidoEm=hoje();salva();fechar();toast('✅ Saldo conferido')};return}
+    $('#cfRes').innerHTML=`<div class="alerta" style="margin-bottom:8px">${dif>0?'O banco tem <b>'+R(dif)+' a mais</b> que o Fatiô.':'O banco tem <b>'+R(-dif)+' a menos</b> que o Fatiô.'}<br><small>Antes de ajustar, vale procurar um lançamento esquecido ou na conta errada (🔍 Buscar em Lançamentos).</small></div>
+      <button class="btn" id="cfLanc">Lançar ajuste de ${R(Math.abs(dif))}</button>
+      <small style="color:var(--mut);font-size:12px;display:block;margin:4px 0 8px">Cria um lançamento "Ajuste de saldo" hoje. Ele muda o saldo, mas não entra nos gráficos nem no "posso gastar".</small>
+      <button class="btn sec" id="cfIni">Corrigir o saldo inicial da conta</button>
+      <small style="color:var(--mut);font-size:12px;display:block;margin-top:4px">Ajusta sem criar lançamento. Muda o saldo também nos dias anteriores.</small>`;
+    $('#cfLanc').onclick=()=>{D.lancs.push({id:uid(),tipo:dif>0?'receita':'despesa',valor:Math.abs(dif),desc:'Ajuste de saldo',cat:'Outros',conta:id,data:hoje(),ajuste:true});
+      c.conferidoEm=hoje();salva();fechar();toast('✅ Ajuste lançado. Saldo igual ao banco')};
+    $('#cfIni').onclick=()=>{c.saldoIni=Math.round(((c.saldoIni||0)+dif)*100)/100;c.conferidoEm=hoje();salva();fechar();toast('✅ Saldo inicial corrigido')};
+  };
+  $('#cfC').onchange=calc;$('#cfB').oninput=calc;calc();setTimeout(()=>$('#cfB').focus(),150);
+}
+// ---- 3. busca ----
+let busca=null; // null = sem busca; string = modo busca
+function resBusca(q){
+  q=semAcento(q).trim();if(!q)return[];
+  const ts=q.split(/\s+/),nq=num(q);
+  return D.lancs.filter(l=>{
+    const hay=semAcento([l.desc,l.cat,nomeConta(l.conta),l.dest?nomeConta(l.dest):'',l.grupo||'',l.ajuste?'ajuste':''].join(' '));
+    if(ts.every(t=>hay.includes(t)))return true;
+    return nq>0&&/^[\d.,]+$/.test(q)&&Math.abs(l.valor-nq)<0.005;
+  }).sort((a,b)=>b.data.localeCompare(a.data)||b.id.localeCompare(a.id));
+}
+function htmlBusca(){
+  const q=busca||'';
+  if(!q.trim())return'<div class="vazio">Busque por descrição, categoria, conta, grupo 📌 ou valor.<br>Ex.: "ifood", "larissa", ".pag", "150"</div>';
+  const rs=resBusca(q);
+  if(!rs.length)return`<div class="vazio">Nada encontrado para "${esc(q)}".</div>`;
+  const d=soma(rs.filter(l=>l.tipo==='despesa')),r=soma(rs.filter(l=>l.tipo==='receita'));
+  let m='',h=`<div class="grid2" style="margin-bottom:6px"><div class="mini"><small>${rs.length} lançamento(s) · despesas</small><b class="neg">${R(d)}</b></div><div class="mini"><small>Receitas</small><b class="pos">${R(r)}</b></div></div>`;
+  rs.slice(0,300).forEach(l=>{
+    const mm=l.data.slice(0,7);if(mm!==m){m=mm;const sm=rs.filter(x=>x.data.slice(0,7)===mm&&x.tipo==='despesa');h+=`<div style="color:var(--mut);font-size:12px;margin:12px 0 2px;display:flex;justify-content:space-between"><span>${nomeMesLongo(mm)}</span><span>${sm.length?'gastos '+R(soma(sm)):''}</span></div>`}
+    const t=l.tipo==='transf';
+    h+=`<div class="item" onclick="formLanc('${l.id}')"><div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
+      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${dataBR(l.data)} · ${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?' · 📌 '+esc(l.grupo):''}</small></div>
+      <div class="val ${l.tipo==='receita'?'pos':l.tipo==='despesa'?'neg':''}">${l.tipo==='despesa'?'-':l.tipo==='receita'?'+':''}${R(l.valor)}</div></div>`});
+  if(rs.length>300)h+=`<div class="vazio">Mostrando os 300 mais recentes. Refine a busca.</div>`;
+  return h;
+}
+function tBusca(){
+  $('#app').innerHTML=`<div class="rapido"><input id="bTxt" placeholder="🔍 Buscar em todos os meses" value="${esc(busca||'')}" autocomplete="off" enterkeyhint="search"><button onclick="busca=null;render()" title="Fechar">✕</button></div>
+    <div class="card" id="bRes">${htmlBusca()}</div>`;
+  const i=$('#bTxt');i.oninput=()=>{busca=i.value;$('#bRes').innerHTML=htmlBusca()};
+  if(document.activeElement!==i)setTimeout(()=>{i.focus();const n=i.value.length;i.setSelectionRange(n,n)},60);
+}
+// ---- 4. fechamento do mês ----
+function fechamento(m){
+  const atual=m===hoje().slice(0,7),r=resumo(m),ra=resumo(addMes(m,-1)),gc=gastoCat(m);
+  const cats=Object.entries(gc).sort((a,b)=>b[1]-a[1]),top=cats.slice(0,5),maxC=top.length?top[0][1]:1;
+  const guard=Math.max(0,guardadoNoMes(m)),pm=pagarDoMes(m),pagas=pm.filter(p=>p.pago).length;
+  const custom=(D.cats?.despesa||[]).filter(c=>gc[c]>0);
+  const grs=grupos().map(g=>[g,resumoGrupo(m,g)]).filter(([,x])=>x.d||x.r);
+  const varD=ra.d>0?Math.round((r.d/ra.d-1)*100):null;
+  const linha=(a,b,cls='')=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--borda)"><span>${a}</span><b class="${cls}">${b}</b></div>`;
+  abrir(`<h2>📊 ${atual?'Resumo parcial de':'Fechamento de'} ${nomeMesLongo(m)}</h2>
+   <div class="mini" style="text-align:center;padding:14px"><small>${r.s>=0?(atual?'Sobrando até agora':'Você fechou o mês com sobra de'):(atual?'No vermelho até agora':'Você fechou o mês no vermelho em')}</small>
+     <div class="grande ${r.s>=0?'pos':'neg'}" style="font-size:28px">${R(Math.abs(r.s))}</div>
+     ${r.r>0?`<small>${r.s>=0?'Guardou '+Math.round(r.s/r.r*100)+'% do que entrou':'Gastou '+Math.round(-r.s/r.r*100)+'% a mais do que entrou'}</small>`:''}</div>
+   <div style="margin-top:10px">
+     ${linha('📥 Entrou',R(r.r),'pos')}
+     ${linha('📤 Saiu',R(r.d)+(varD!==null?` <small style="color:var(--mut);font-weight:500">(${varD>0?'+':''}${varD}% vs mês anterior)</small>`:''),'neg')}
+     ${guard?linha('🐷 Guardado em caixinhas',R(guard),'pos'):''}
+     ${pm.length?linha('🧾 Contas a pagar',`${pagas} de ${pm.length} pagas`):''}
+   </div>
+   ${top.length?`<h3 style="font-size:14px;color:var(--mut);margin:16px 0 6px">Para onde foi o dinheiro</h3>
+     ${top.map(([c,v])=>`<div style="margin:6px 0"><div style="display:flex;justify-content:space-between;font-size:14px"><span>${icCat('despesa',c)} ${esc(c)}</span><b>${R(v)} <small style="color:var(--mut);font-weight:500">${r.d?Math.round(v/r.d*100):0}%</small></b></div><div class="barra" style="height:6px"><i style="width:${v/maxC*100}%;background:var(--azul)"></i></div></div>`).join('')}`:''}
+   ${custom.length?`<h3 style="font-size:14px;color:var(--mut);margin:16px 0 6px">Suas categorias</h3>${custom.map(c=>linha(icCat('despesa',c)+' '+esc(c),R(gc[c]))).join('')}`:''}
+   ${grs.length?`<h3 style="font-size:14px;color:var(--mut);margin:16px 0 6px">📌 Controles à parte</h3>${grs.map(([g,x])=>linha(esc(g),(x.r?'+'+R(x.r)+' ':'')+(x.d?'-'+R(x.d):''))).join('')}`:''}
+   <div class="linha"><button class="btn sec" onclick="fechar()">Fechar</button>${!atual?`<button class="btn" onclick="D.fechVisto=D.fechVisto||{};D.fechVisto['${m}']=1;salva();fechar()">Ok, visto</button>`:''}</div>`);
+}
+function cardFechamento(){
+  const h=hoje(),m=h.slice(0,7);if(mes!==m||+h.slice(8)>10)return'';
+  const ant=addMes(m,-1);if((D.fechVisto||{})[ant]||!doMes(ant).length)return'';
+  const r=resumo(ant);
+  return`<div class="card" style="border-color:var(--azul)"><h3>📊 Fechamento de &nbsp;${nomeMesLongo(ant)}</h3>
+    <div style="font-size:15px">${r.s>=0?'Sobraram':'Faltaram'} <b class="${r.s>=0?'pos':'neg'}">${R(Math.abs(r.s))}</b> no mês passado.</div>
+    <div class="linha" style="margin-top:10px"><button class="btn sec" onclick="D.fechVisto=D.fechVisto||{};D.fechVisto['${ant}']=1;salva();render()">Dispensar</button><button class="btn" onclick="fechamento('${ant}')">Ver resumo</button></div></div>`;
+}
 function cardDicas(){
   const ds=dicas(mes);
-  return`<div class="card"><h3>💡 Assistente do mês</h3>
+  return`<div class="card"><h3>💡 Assistente do mês <button class="btnp" onclick="fechamento(mes)">📊 Resumo do mês</button></h3>
     ${ds.length?ds.map(d=>`<div class="dica">${d}</div>`).join(''):'<div class="dica" style="color:var(--mut)">Lance seus gastos e receitas para receber dicas personalizadas aqui.</div>'}</div>`;
 }
 // ---- card do gráfico separado (tela inicial) ----
@@ -802,6 +914,7 @@ function tInicio(){
   $('#app').innerHTML=`
   ${linhaOla()}
   ${barraRapida()}
+  ${cardFechamento()}
   ${venc.length?`<div class="alerta">⚠️ ${venc.length} conta(s) vencida(s) sem pagamento: ${venc.map(p=>esc(p.desc)).join(', ')}</div>`:''}
   ${prox.length?`<div class="alerta">⏰ Vence em até 5 dias: ${prox.map(p=>esc(p.desc)+' ('+dataBR(p.venc)+')').join(', ')}</div>`:''}
   ${faturasAPagar().filter(f=>f.venc<=addDias(h,5)).map(f=>`<div class="alerta" style="display:flex;gap:8px;align-items:center"><span style="flex:1">💳 Fatura ${esc(f.c.nome)} ${R(f.resta)} ${f.venc<h?'<b>venceu</b> '+dataBR(f.venc):'vence '+dataBR(f.venc)}</span><button class="btnp" style="background:#78350f;color:#fde68a" onclick="pagarFatura('${f.c.id}','${f.mv}')">Pagar</button></div>`).join('')}
@@ -821,7 +934,7 @@ function tInicio(){
   </div>
   ${cd}
   ${cardDicas()}
-  <div class="card"><h3>Minhas contas</h3>${listaContas(false)}</div>
+  <div class="card"><h3>Minhas contas <button class="btnp" onclick="conferirSaldo()">🔄 Conferir</button></h3>${listaContas(false)}</div>
   <div class="card"><h3>Gastos por categoria</h3>
     ${cats.length?`<canvas id="pizza" height="180"></canvas><div class="legenda" id="leg"></div>`:'<div class="vazio">Nenhuma despesa neste mês</div>'}
     ${temSep?'<small style="color:var(--mut);font-size:12px;display:block;margin-top:8px">📌 Lançamentos separados não entram neste gráfico; cada item pode ou não afetar o saldo</small>':''}
@@ -861,6 +974,7 @@ function barras(id='barras',fn=resumoGraf){
 let selLanc=null; // null = modo normal; Set = modo seleção
 const ocultaSepLanc=()=>!!D.ocultaSepLanc;
 function tLanc(){
+  if(busca!==null)return tBusca();
   let ls=doMesTudo(mes);if(filtro!=='todos')ls=ls.filter(l=>l.tipo===filtro);
   const nOcultos=ocultaSepLanc()?ls.filter(l=>l.grupo).length:0;
   if(ocultaSepLanc())ls=ls.filter(l=>!l.grupo);
@@ -870,12 +984,12 @@ function tLanc(){
   ls.forEach(l=>{if(l.data!==dia){dia=l.data;html+=`<div style="color:var(--mut);font-size:12px;margin:10px 0 2px">${new Date(dia+'T12:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit'})}</div>`}
     const t=l.tipo==='transf',on=selLanc&&selLanc.has(l.id);
     html+=`<div class="item ${on?'sel':''}" data-id="${l.id}">${selLanc?`<div class="selbox">${on?'✓':''}</div>`:''}<div class="ic">${t?'🔁':icCat(l.tipo,l.cat)}</div>
-      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>${sepAfeta(l)?' <span class="tag" style="background:#14532d55;color:var(--verde)">↕ saldo</span>':''}`:''}${l.tipo==='despesa'&&!l.grupo&&ehPontual(l)?' <span class="tag pt">⚡ pontual</span>':''}</small></div>
+      <div class="info"><b>${esc(l.desc||l.cat)}</b><small>${t?esc(nomeConta(l.conta))+' → '+esc(nomeConta(l.dest)):esc(l.cat)+' · '+esc(nomeConta(l.conta))}${l.grupo?` <span class="tag">📌 ${esc(l.grupo)}</span>${sepAfeta(l)?' <span class="tag" style="background:#14532d55;color:var(--verde)">↕ saldo</span>':''}`:''}${l.ajuste?' <span class="tag">🔄 ajuste</span>':l.tipo==='despesa'&&!l.grupo&&ehPontual(l)?' <span class="tag pt">⚡ pontual</span>':''}</small></div>
       <div class="val ${l.tipo==='receita'?'pos':l.tipo==='despesa'?'neg':''}">${l.tipo==='despesa'?'-':l.tipo==='receita'?'+':''}${R(l.valor)}</div></div>`});
   const avisoOc=nOcultos?`<div class="vazio" style="padding:10px 0 2px;font-size:12px">🙈 ${nOcultos} lançamento(s) 📌 oculto(s) · <a onclick="D.ocultaSepLanc=false;salva();render()" style="color:var(--azul);cursor:pointer">mostrar</a></div>`:'';
   const topo=selLanc
     ?`<div class="chips" style="align-items:center"><button class="chip on" onclick="selLanc=null;render()">✕ Cancelar</button><button class="chip" id="selTudo">${ls.length&&selLanc.size===ls.length?'Desmarcar todos':'Selecionar todos'}</button></div>`
-    :`${barraRapida()}<div class="chips">${[['todos','Todos'],['despesa','Despesas'],['receita','Receitas'],['transf','Transferências']].map(([k,n])=>`<button class="chip ${filtro===k?'on':''}" onclick="filtro='${k}';render()">${n}</button>`).join('')}${ls.length?'<button class="chip" onclick="selLanc=new Set();render()">☑️ Selecionar</button>':''}</div>`;
+    :`${barraRapida()}<div class="chips">${[['todos','Todos'],['despesa','Despesas'],['receita','Receitas'],['transf','Transferências']].map(([k,n])=>`<button class="chip ${filtro===k?'on':''}" onclick="filtro='${k}';render()">${n}</button>`).join('')}<button class="chip" onclick="busca='';render()">🔍 Buscar</button>${ls.length?'<button class="chip" onclick="selLanc=new Set();render()">☑️ Selecionar</button>':''}</div>`;
   $('#app').innerHTML=`${topo}
    <div class="card" ${selLanc?'style="margin-bottom:150px"':''}>${html||(nOcultos?'':'<div class="vazio">Nenhum lançamento neste mês.<br>Toque no + ou use o campo acima.</div>')}${avisoOc}</div>
    ${selLanc?barraSelecao(ls):''}`;
@@ -1177,7 +1291,8 @@ function formLanc(id,pre){
     // só grava quando você escolhe diferente do automático
     if(tipo==='despesa'&&pontManual&&$('#fpont').checked!==autoPont())base.pontual=$('#fpont').checked;
     if(id){Object.assign(l,base);if(tipo!=='transf')delete l.dest;if(!grpFinal){delete l.grupo;delete l.afetaSaldo}else if(!base.afetaSaldo)delete l.afetaSaldo;if(!('pontual' in base))delete l.pontual}
-    else{const n=$('#frep')?.checked?Math.max(2,Math.min(120,+$('#fqtd').value||2)):1;
+    else{if(!confirmaDuplicado(base))return;
+      const n=$('#frep')?.checked?Math.max(2,Math.min(120,+$('#fqtd').value||2)):1;
       for(let i=0;i<n;i++){const[y,m,d]=base.data.split('-');const mm=addMes(y+'-'+m,i);
         D.lancs.push({...base,id:uid()+i,data:mm+'-'+String(Math.min(+d,ultDia(mm))).padStart(2,'0'),desc:n>1?(base.desc||base.cat)+' '+(i+1)+'/'+n:base.desc})}}
     if(grpFinal)D.grupoSel=grpFinal;
@@ -1530,7 +1645,7 @@ document.addEventListener('visibilitychange',()=>{
   if(temPin()&&saiuEm&&Date.now()-saiuEm>60000&&$('#trava').classList.contains('oculto'))travar();
 });
 // ================== EVENTOS ==================
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{aba=b.dataset.t;selLanc=null;scrollTo(0,0);render()});
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{if(b.dataset.t!=='lanc')busca=null;aba=b.dataset.t;selLanc=null;scrollTo(0,0);render()});
 $('#mAnt').onclick=()=>{selLanc=null;mes=addMes(mes,-1);render()};
 $('#mProx').onclick=()=>{selLanc=null;mes=addMes(mes,1);render()};
 $('#fab').onclick=()=>{if(aba==='contas')formPagar();else if(aba==='receber')formReceber();else if(aba==='planos')formMeta();else formLanc()};
